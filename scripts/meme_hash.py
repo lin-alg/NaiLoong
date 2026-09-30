@@ -188,10 +188,11 @@ def github_image_url(url: str) -> str | None:
         and len(parts[1]) == 40
         and all(c in "0123456789abcdefABCDEF" for c in parts[1])
     ):
+        owner = parts[0]
         commit = parts[1]
+        repo = default_repo
         file_path = "/".join(parts[2:])
-        # 统一使用主仓库 REPOSITORY，因为 commit 已经在主仓库，且 token 只有主仓库访问权
-        return f"https://raw.githubusercontent.com/{REPOSITORY}/{commit}/{file_path}"
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{file_path}"
 
     # 适配完整 GitHub 链接: owner/repo/raw(或blob)/commit/path
     if len(parts) >= 5 and parts[2] in {"raw", "blob"}:
@@ -487,15 +488,10 @@ def hash_attachment_urls(urls):
 def hash_fork_urls(urls):
     hashes = []
     for url in urls:
-        idx = url.find("assets/")
-        file_path = url[idx:] if idx != -1 else url.split("/")[-1]
-        
-        try:
-            data = subprocess.check_output(["git", "show", f"FETCH_HEAD:{file_path}"])
-        except subprocess.CalledProcessError as exc:
-            raise BotError(f"无法从 PR 的 Git 提交中读取图片 {file_path}: {exc}")
-            
-        validate_image_payload(data, "")
+        raw_url = github_image_url(url)
+        if raw_url is None:
+            continue
+        data = fetch_image_bytes(raw_url)
         hashes.append(sha256_bytes(data))
     return hashes
 
