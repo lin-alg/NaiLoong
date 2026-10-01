@@ -38,7 +38,7 @@
 1. `app.js` 读取 `data/manifest.json`，按 `id` 建立角色路由。
 2. 每个角色的 `subcategories[].file` 指向一个表情 JSON 数组；第一个分类文件所在目录默认提供该角色的 `tags.json`，也可以在 manifest 中显式指定 `tags`。
 3. `search.js` 按 `tags.json` 的维度顺序读取每个维度的本地序号，再建立页面筛选索引；数据数组不存跨维度展平索引。tag panel 的维度显示名从 `data/tag-translations.json` 读取。
-4. 每条数据的 `url` 是原图来源。卡片根据角色、分类和固定 commit URL 推导 `preview` 分支的 WebP 地址；下载按钮才使用 `url`，`ghimg.js` 对预览和下载用的 GitHub `blob` / `raw` 地址尝试转换和代理回退。
+4. 每条数据的 `url` 是原图来源。卡片根据角色、分类和固定 commit URL 推导 `preview` 分支的 WebP 地址；点击卡片会在弹窗中加载原图，下载按钮也使用 `url`。`ghimg.js` 对预览和原图用的 GitHub `blob` / `raw` 地址尝试转换和代理回退。
 
 表情条目至少包含非空 `title`、`url` 和 `tags`。`tags` 数组长度与维度数相同，按维度顺序存本地整数序号或 `null`；对象写法使用“维度名 → 本地序号、标签文字或 `null`”。详情见 [README 数据规范](../README.md#数据规范)。
 
@@ -112,7 +112,7 @@ node tests/ghimg.test.js
 
 - 保持单页、零构建依赖的加载方式；新增 JS/CSS 文件后在 `index.html` 中正确引用。
 - 修改页面渲染时使用 `app.js` 既有数据流和 `search.js` 公共接口，不要在卡片渲染中重复实现标签语义。
-- 卡片展示必须使用 `preview` 分支中的 WebP；原始 `url` 只用于下载，不要让原图参与列表展示。
+- 卡片列表展示必须使用 `preview` 分支中的 WebP；点击卡片时可在弹窗中加载原始 `url`，下载按钮也使用原始 `url`，不要让原图参与列表展示。
 - 核对桌面与窄屏布局、无结果状态、加载/失败状态和键盘操作。
 - 改动视觉样式时参照 `github-design-system-analysis.md`，本地预览真实数据。
 - PR 描述用户可见变化；UI 行为变化尽量附截图。

@@ -28,6 +28,8 @@
 
   const ICON_DOWNLOAD =
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 1.25a.75.75 0 0 1 .75.75v6.19l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.78 1.78V2A.75.75 0 0 1 8 1.25Z"/><path fill="currentColor" d="M2.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-2.5a.75.75 0 0 1 .75-.75Z"/></svg>';
+  const ICON_ZOOM =
+    '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"/><path d="M7 4.75v4.5M4.75 7h4.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>';
 
   function $(id) {
     return document.getElementById(id);
@@ -304,6 +306,15 @@
       '<article class="card" style="--i:' +
       Math.min(index, STAGGER_CAP) +
       '">' +
+      '<button class="card-open" type="button" data-original-url="' +
+      link +
+      '" data-image-title="' +
+      esc(item.title) +
+      '" aria-label="查看原图：' +
+      esc(item.title) +
+      '">' +
+      ICON_ZOOM +
+      "</button>" +
       '<div class="card-media"><img src="' +
       src +
       '" alt="' +
@@ -555,6 +566,26 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
+  function showOriginalImage(button) {
+    const url = button.dataset.originalUrl;
+    if (!url) return;
+    if (typeof el.imageDialog.showModal !== "function") {
+      window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    const image = el.imageDialogImage;
+    el.imageDialogTitle.textContent = button.dataset.imageTitle || "原图";
+    image.alt = button.dataset.imageTitle || "原图";
+    image.hidden = false;
+    el.imageDialogStatus.textContent = "正在加载原图…";
+    el.imageDialogStatus.hidden = false;
+    delete image._gh;
+    image.src = url;
+    if (window.GhImg) window.GhImg.decorate(image);
+    el.imageDialog.showModal();
+  }
+
   function storageGet(key) {
     try {
       return localStorage.getItem(key);
@@ -714,15 +745,41 @@
 
     el.grid.addEventListener("click", async (event) => {
       const link = event.target.closest(".download-btn");
-      if (!link) return;
-      event.preventDefault();
-      try {
-        await downloadOriginal(link);
-        toast("原图下载已开始");
-      } catch (err) {
-        window.open(link.href, "_blank", "noopener,noreferrer");
-        toast("无法直接下载，已在新窗口打开原图");
+      if (link) {
+        event.preventDefault();
+        try {
+          await downloadOriginal(link);
+          toast("原图下载已开始");
+        } catch (err) {
+          window.open(link.href, "_blank", "noopener,noreferrer");
+          toast("无法直接下载，已在新窗口打开原图");
+        }
+        return;
       }
+      const openButton = event.target.closest(".card-open");
+      if (openButton) showOriginalImage(openButton);
+    });
+
+    el.imageDialogClose.addEventListener("click", () => el.imageDialog.close());
+    el.imageDialog.addEventListener("click", (event) => {
+      if (event.target === el.imageDialog) el.imageDialog.close();
+    });
+    el.imageDialog.addEventListener("close", () => {
+      el.imageDialogImage.removeAttribute("src");
+      delete el.imageDialogImage._gh;
+      el.imageDialogImage.hidden = false;
+      el.imageDialogStatus.textContent = "正在加载原图…";
+      el.imageDialogStatus.hidden = true;
+    });
+    el.imageDialogImage.addEventListener("load", () => {
+      el.imageDialogStatus.hidden = true;
+    });
+    el.imageDialogImage.addEventListener("error", (event) => {
+      const image = event.currentTarget;
+      if (window.GhImg && window.GhImg.advance(image)) return;
+      image.hidden = true;
+      el.imageDialogStatus.textContent = "原图加载失败";
+      el.imageDialogStatus.hidden = false;
     });
 
     el.searchForm.addEventListener("submit", (event) => {
@@ -773,6 +830,11 @@
     el.toast = $("toast");
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
+    el.imageDialog = $("imageDialog");
+    el.imageDialogTitle = $("imageDialogTitle");
+    el.imageDialogImage = $("imageDialogImage");
+    el.imageDialogStatus = $("imageDialogStatus");
+    el.imageDialogClose = $("imageDialogClose");
 
     const storedSize = Number(storageGet("nai-page-size"));
     if (PAGE_SIZES.includes(storedSize)) state.pageSize = storedSize;
