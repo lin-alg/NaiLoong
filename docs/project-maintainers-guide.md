@@ -94,6 +94,8 @@ node tests/ghimg.test.js
 3. `node tests/ghimg.test.js`，验证 blob / RAW 图片地址转换。
 4. `python scripts/validate_data.py`，检查仓库当前全部数据、manifest 引用、Fork 图片 URL 和重复 URL。
 
+这些 workflow 只负责检查和必要的状态维护，不会合并 Pull Request。检查完成后由维护者审核并手动合并；合并后的预览图生成和 Pages 部署属于后续自动化。
+
 数据校验器对图片 URL 只进行结构检查，不向网络请求 Fork 文件；`assets/placeholders/` 是现有演示数据的例外。独立的 `meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件，执行哈希去重与 5 MB 检查。合并后的 `generate-previews.yml` 只处理新增或替换的图片记录，把 GIF 首帧和静态图转成长宽不超过 300 像素、严格小于 10 KiB 的 WebP，并保留透明度，写入 `preview` 分支的 `previews/<role>/<category>/<owner>/<commit>/...webp`。部署工作流也会先执行数据校验，校验成功后才上传 Pages artifact。检查失败时从 Actions 的报错文件和条目序号定位；如果校验器规则与本指南不一致，应一起修改实现、测试和文档。
 
 ## 图片哈希与投稿状态
