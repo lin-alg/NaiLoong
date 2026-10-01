@@ -581,9 +581,9 @@ code {
 }
 
 .hero-tile.t1 { top: 0; left: 0; --rot: -4deg; z-index: 5; }
-.hero-tile.t2 { top: 8%; right: 2%; --rot: 5deg; z-index: 3; }
-.hero-tile.t3 { bottom: 2%; left: 20%; --rot: 3deg; z-index: 2; }
-.hero-tile.t4 { bottom: 8%; right: 6%; --rot: -6deg; z-index: 1; }
+.hero-tile.t2 { top: 8%; right: 2%; --rot: 5deg; z-index: 1; }
+.hero-tile.t3 { bottom: 2%; left: 20%; --rot: 3deg; z-index: 3; }
+.hero-tile.t4 { bottom: 8%; right: 6%; --rot: -6deg; z-index: 2; }
 
 .hero-tile:hover,
 .hero-tile:focus-within {
