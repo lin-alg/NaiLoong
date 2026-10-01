@@ -266,6 +266,11 @@ class GitHub:
         text = base64.b64decode(item.get("content", "")).decode("utf-8")
         return text, item.get("sha")
 
+    def read_content_item(self, path: str, ref: str):
+        quoted_path = quote(path, safe="/")
+        query = urlencode({"ref": ref})
+        return self.get_optional(f"/repos/{self.repository}/contents/{quoted_path}?{query}")
+
     def write_contents(self, path: str, branch: str, text: str, message: str, sha=None):
         payload = {
             "message": message,
@@ -276,6 +281,27 @@ class GitHub:
             payload["sha"] = sha
         quoted_path = quote(path, safe="/")
         return self.request("PUT", f"/repos/{self.repository}/contents/{quoted_path}", payload)
+
+    def write_binary_contents(self, path: str, branch: str, content: bytes, message: str, sha=None):
+        payload = {
+            "message": message,
+            "content": base64.b64encode(content).decode("ascii"),
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        quoted_path = quote(path, safe="/")
+        return self.request("PUT", f"/repos/{self.repository}/contents/{quoted_path}", payload)
+
+    def get_ref(self, ref: str):
+        return self.get_optional(f"/repos/{self.repository}/git/ref/{quote(ref, safe='/')}")
+
+    def create_ref(self, ref: str, sha: str):
+        return self.request(
+            "POST",
+            f"/repos/{self.repository}/git/refs",
+            {"ref": f"refs/{ref}", "sha": sha},
+        )
 
     def load_state(self):
         state_path = ROOT / STATE_PATH

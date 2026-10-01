@@ -26,8 +26,8 @@
   };
   const cache = new Map();
 
-  const ICON_COPY =
-    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.75 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/><path fill="currentColor" d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/></svg>';
+  const ICON_DOWNLOAD =
+    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 1.25a.75.75 0 0 1 .75.75v6.19l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.78 1.78V2A.75.75 0 0 1 8 1.25Z"/><path fill="currentColor" d="M2.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-2.5a.75.75 0 0 1 .75-.75Z"/></svg>';
 
   function $(id) {
     return document.getElementById(id);
@@ -284,7 +284,14 @@
 
   function cardMarkup(item, charMeta, index) {
     const alt = item.title + " · " + charMeta.name;
-    const src = esc(window.GhImg ? (window.GhImg.toRaw(item.url) || item.url) : item.url);
+    const sub = currentSub();
+    const preview = window.GhImg && sub
+      ? window.GhImg.preview(item.url, charMeta.id, sub.meta.id)
+      : null;
+    const localFallback = typeof item.url === "string" && item.url.indexOf("assets/placeholders/") === 0
+      ? item.url
+      : CONFIG.fallback;
+    const src = esc(preview || localFallback);
     const link = esc(window.GhImg ? window.GhImg.link(item.url) : item.url);
     const tags = window.MemeSearch.labelsOf(
       window.MemeSearch.resolveRawTags(item.tags, currentChar().tagIndex),
@@ -306,11 +313,11 @@
       '<h3 class="card-title">' +
       esc(item.title) +
       "</h3>" +
-      '<button class="btn btn-ghost icon-btn copy-btn" type="button" title="复制图片链接" aria-label="复制图片链接" data-url="' +
+      '<a class="btn btn-ghost icon-btn download-btn" href="' +
       link +
-      '">' +
-      ICON_COPY +
-      "</button></div>" +
+      '" download title="下载原图" aria-label="下载原图">' +
+      ICON_DOWNLOAD +
+      "</a></div>" +
       (tags ? '<div class="card-tags">' + tags + "</div>" : "") +
       "</div></article>"
     );
@@ -533,19 +540,19 @@
     media.innerHTML = "<span>图裂了 · broken link</span>";
   }
 
-  async function copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.style.position = "fixed";
-    area.style.opacity = "0";
-    document.body.appendChild(area);
-    area.select();
-    document.execCommand("copy");
-    area.remove();
+  async function downloadOriginal(link) {
+    const response = await fetch(link.href, { mode: "cors" });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const download = document.createElement("a");
+    const path = new URL(link.href).pathname;
+    download.href = objectUrl;
+    download.download = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || "meme";
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
   function storageGet(key) {
@@ -706,14 +713,15 @@
     );
 
     el.grid.addEventListener("click", async (event) => {
-      const btn = event.target.closest(".copy-btn");
-      if (!btn) return;
+      const link = event.target.closest(".download-btn");
+      if (!link) return;
+      event.preventDefault();
       try {
-        const absolute = new URL(btn.dataset.url, location.href).href;
-        await copyText(absolute);
-        toast("图片链接已复制");
+        await downloadOriginal(link);
+        toast("原图下载已开始");
       } catch (err) {
-        toast("复制失败，请手动复制");
+        window.open(link.href, "_blank", "noopener,noreferrer");
+        toast("无法直接下载，已在新窗口打开原图");
       }
     });
 

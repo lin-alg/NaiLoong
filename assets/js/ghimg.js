@@ -5,6 +5,8 @@
     repo: "https://github.com/lin-alg/NaiLoong",
     proxies: ["https://gh-proxy.com/{u}", "https://ghproxy.net/{u}", "https://ghfast.top/{u}"],
     ref: "main",
+    previewRef: "preview",
+    previewDir: "previews",
     ttl: 6 * 60 * 60 * 1000,
     storeKey: "nai-gh-route",
     timeout: 2600,
@@ -35,6 +37,48 @@
       return "https://raw.githubusercontent.com/" + match[1] + "/" + match[2] + "/" + match[3] + "/" + match[4];
     }
     return null;
+  }
+
+  function sourceParts(url) {
+    if (typeof url !== "string") return null;
+    const clean = url.trim().split(/[?#]/)[0];
+    let match = /^([A-Za-z0-9-]+)\/([0-9a-f]{40})\/(.+)$/i.exec(clean);
+    if (match) return { owner: match[1], commit: match[2].toLowerCase(), path: match[3] };
+    match = /^https?:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\/(?:blob|raw)\/([^/?#]+)\/(.+)$/.exec(clean);
+    if (match && /^[0-9a-f]{40}$/i.test(match[3])) {
+      return { owner: match[1], commit: match[3].toLowerCase(), path: match[4] };
+    }
+    match = /^https?:\/\/raw\.githubusercontent\.com\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)\/(.+)$/.exec(clean);
+    if (match && /^[0-9a-f]{40}$/i.test(match[3])) {
+      return { owner: match[1], commit: match[3].toLowerCase(), path: match[4] };
+    }
+    return null;
+  }
+
+  function encodePathPart(value) {
+    try {
+      return encodeURIComponent(decodeURIComponent(value));
+    } catch (err) {
+      return encodeURIComponent(value);
+    }
+  }
+
+  function preview(url, roleId, categoryId) {
+    const source = sourceParts(url);
+    if (!source || !roleId || !categoryId) return null;
+    const parts = source.path.split("/");
+    const filename = parts.pop() || "image";
+    const dot = filename.lastIndexOf(".");
+    const stem = dot > 0 ? filename.slice(0, dot) : filename;
+    const previewPath = [
+      config.previewDir,
+      roleId,
+      categoryId,
+      source.owner,
+      source.commit
+    ].concat(parts, (stem || "image") + ".webp");
+    return "https://raw.githubusercontent.com/" + repoPath() + "/" + config.previewRef + "/" +
+      previewPath.map(encodePathPart).join("/");
   }
 
   function readRoute() {
@@ -174,6 +218,7 @@
       config = Object.assign({}, config, opts || {});
     },
     toRaw,
+    preview,
     candidates,
     decorate,
     advance,

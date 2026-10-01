@@ -31,5 +31,21 @@ assert.strictEqual(
   toRaw(`contributor/${commit}/assets/memes/meme.png`),
   `https://raw.githubusercontent.com/contributor/NaiLoong/${commit}/assets/memes/meme.png`
 );
+assert.strictEqual(
+  context.window.GhImg.preview(
+    `contributor/${commit}/assets/memes/meme.gif`,
+    "naiwa",
+    "animated"
+  ),
+  `https://raw.githubusercontent.com/lin-alg/NaiLoong/preview/previews/naiwa/animated/contributor/${commit}/assets/memes/meme.webp`
+);
+assert.strictEqual(
+  context.window.GhImg.preview(
+    "assets/placeholders/fallback.gif",
+    "naiwa",
+    "animated"
+  ),
+  null
+);
 
 console.log("GitHub image URL conversion passed");

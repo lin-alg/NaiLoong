@@ -23,6 +23,8 @@
 | `.github/workflows/pr-check.yml` | Pull Request 上执行数据校验器和 Python 单元测试。 |
 | `.github/workflows/deploy.yml` | 检查数据并将仓库根目录发布到 GitHub Pages。 |
 | `.github/workflows/meme-hash.yml` | Issue 图片和 PR 图片的哈希去重、认领状态、合并回收和每日归档。 |
+| `.github/workflows/generate-previews.yml` | 合并到 `main` 的 PR 触发预览图生成，并写入主仓库 `preview` 分支。 |
+| `scripts/generate_previews.py` | 读取合并后的新增图片，生成小于 10 KiB 的 WebP 并上传到预览分支。 |
 | `scripts/validate_data.py` | 数据、manifest、分类引用、标签和图片地址的仓库级校验。 |
 | `tests/` | 数据校验、标签解析、图片 URL 和哈希自动化测试；Python 使用标准库，Node 使用内置断言。 |
 | `docs/` | 面向不同贡献者的投稿、Git 和项目开发说明。 |
@@ -36,7 +38,7 @@
 1. `app.js` 读取 `data/manifest.json`，按 `id` 建立角色路由。
 2. 每个角色的 `subcategories[].file` 指向一个表情 JSON 数组；第一个分类文件所在目录默认提供该角色的 `tags.json`，也可以在 manifest 中显式指定 `tags`。
 3. `search.js` 按 `tags.json` 的维度顺序读取每个维度的本地序号，再建立页面筛选索引；数据数组不存跨维度展平索引。tag panel 的维度显示名从 `data/tag-translations.json` 读取。
-4. 每条数据的 `url` 由卡片组件作为图片地址加载；`ghimg.js` 仅对 GitHub `blob` / `raw` 图片地址尝试转换和代理回退。
+4. 每条数据的 `url` 是原图来源。卡片根据角色、分类和固定 commit URL 推导 `preview` 分支的 WebP 地址；下载按钮才使用 `url`，`ghimg.js` 对预览和下载用的 GitHub `blob` / `raw` 地址尝试转换和代理回退。
 
 表情条目至少包含非空 `title`、`url` 和 `tags`。`tags` 数组长度与维度数相同，按维度顺序存本地整数序号或 `null`；对象写法使用“维度名 → 本地序号、标签文字或 `null`”。详情见 [README 数据规范](../README.md#数据规范)。
 
@@ -92,7 +94,7 @@ node tests/ghimg.test.js
 3. `node tests/ghimg.test.js`，验证 blob / RAW 图片地址转换。
 4. `python scripts/validate_data.py`，检查仓库当前全部数据、manifest 引用、Fork 图片 URL 和重复 URL。
 
-数据校验器对图片 URL 只进行结构检查，不向网络请求 Fork 文件；`assets/placeholders/` 是现有演示数据的例外。独立的 `meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件，执行哈希去重与 5 MB 检查。部署工作流也会先执行数据校验，校验成功后才上传 Pages artifact。检查失败时从 Actions 的报错文件和条目序号定位；如果校验器规则与本指南不一致，应一起修改实现、测试和文档。
+数据校验器对图片 URL 只进行结构检查，不向网络请求 Fork 文件；`assets/placeholders/` 是现有演示数据的例外。独立的 `meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件，执行哈希去重与 5 MB 检查。合并后的 `generate-previews.yml` 只处理新增或替换的图片记录，把 GIF 首帧和静态图转成长宽不超过 300 像素、严格小于 10 KiB 的 WebP，并保留透明度，写入 `preview` 分支的 `previews/<role>/<category>/<owner>/<commit>/...webp`。部署工作流也会先执行数据校验，校验成功后才上传 Pages artifact。检查失败时从 Actions 的报错文件和条目序号定位；如果校验器规则与本指南不一致，应一起修改实现、测试和文档。
 
 ## 图片哈希与投稿状态
 
@@ -108,9 +110,16 @@ node tests/ghimg.test.js
 
 - 保持单页、零构建依赖的加载方式；新增 JS/CSS 文件后在 `index.html` 中正确引用。
 - 修改页面渲染时使用 `app.js` 既有数据流和 `search.js` 公共接口，不要在卡片渲染中重复实现标签语义。
+- 卡片展示必须使用 `preview` 分支中的 WebP；原始 `url` 只用于下载，不要让原图参与列表展示。
 - 核对桌面与窄屏布局、无结果状态、加载/失败状态和键盘操作。
 - 改动视觉样式时参照 `github-design-system-analysis.md`，本地预览真实数据。
 - PR 描述用户可见变化；UI 行为变化尽量附截图。
+
+## 预览图分支
+
+`preview` 是主仓库专用的生成分支，不用于接收贡献者 PR。首次有合并 PR 需要写入预览时，workflow 会从 `main` 创建该分支；预览文件的路径与数据角色、分类和原图来源层级对应，不把不同来源的同名文件压成一个平面目录。
+
+当前已有条目若需要补图，由维护者把原图转换为保留透明度的 WebP 后手动提交到同一分支和路径。自动化不扫描历史条目，只处理 `pull_request_target` 的合并事件；重新运行同一个 workflow 时会复用相同路径并跳过内容未变化的预览。
 
 ## 提交 PR
 
