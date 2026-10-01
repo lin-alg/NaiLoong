@@ -3,6 +3,3 @@ contact_links:
   - name: 在奶-hub 表情投稿区评论
     url: https://github.com/lin-alg/NaiLoong/issues/1
     about: 仅分享表情包请直接在评论中上传图片。
-  - name: 创建项目建议或问题反馈
-    url: https://github.com/lin-alg/NaiLoong/issues/new?template=project_feedback.md
-    about: Issue 用于反馈网站或项目，不用于投稿表情包。
