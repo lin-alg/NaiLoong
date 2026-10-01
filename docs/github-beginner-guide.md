@@ -162,10 +162,10 @@ git push -u origin meme/naiwa-laugh
 
 1. 打开本仓库或你刚推送分支的 GitHub 页面，点 **Compare & pull request**。
 2. 检查目标是原仓库 `lin-alg/NaiLoong` 的 `main`，来源是你 fork 的 `meme/...` 工作分支。不要选择 `image` 分支。
-3. 标题写明新增或修订了什么；正文可说明角色、分类、图片来源及预览链接。
+3. 标题写明新增或修订了什么；正文可说明角色、分类和图片来源。预览图由合并后的 workflow 生成，不需要在 PR 中填写。
 4. 如果你是在处理投稿区评论中的图片，将评论顶部机器人生成的 `MEME-CLAIM-...` 口令原样复制到 PR 描述中。一个 PR 应完整处理该评论中的全部图片。
 5. 看 **Data Linter** 和 **Meme Image Hash Check** 检查是否通过。失败时打开检查详情，按报错文件和条目序号修正，然后在同一分支继续 `add → commit → push`；PR 会自动更新。
-6. 维护者审阅并合并后，表情数据会进入网站。图片仍由处理者自己的公开 Fork 的 `image` 分支提供。
+6. 维护者审阅并合并后，预览图 workflow 会从你的固定 commit 原图生成轻量 WebP 并存入主仓库的 `preview` 分支，同时保留 PNG/GIF 透明度。网站卡片加载预览图，下载按钮仍获取你 Fork 中的原图；不要把 `preview` 分支或 `previews/` 目录加入投稿 PR。
 
 > 截图占位：PR 的 base / compare 分支选择和 Data Linter 检查结果。
 

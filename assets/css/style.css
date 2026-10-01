@@ -1024,7 +1024,7 @@ code {
   letter-spacing: -0.2px;
 }
 
-.copy-btn {
+.download-btn {
   margin-left: auto;
   flex: none;
   color: var(--muted);
@@ -1032,12 +1032,12 @@ code {
   transition: opacity 150ms ease-out, color 150ms ease-out, background-color 150ms ease-out;
 }
 
-.card:hover .copy-btn,
-.copy-btn:focus-visible {
+.card:hover .download-btn,
+.download-btn:focus-visible {
   opacity: 1;
 }
 
-.copy-btn:hover {
+.download-btn:hover {
   color: var(--accent);
 }
 
@@ -1383,6 +1383,10 @@ code {
 }
 
 @media (max-width: 767px) {
+  .download-btn {
+    opacity: 1;
+  }
+
   .hero {
     padding: var(--sp-10) 0;
   }

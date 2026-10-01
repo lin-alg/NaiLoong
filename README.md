@@ -6,7 +6,7 @@
 [![Static Site](https://img.shields.io/badge/Static-SPA%20%2B%20zero%20build-8dd6ff?logo=github)](./index.html)
 [![Repo Size](https://img.shields.io/github/repo-size/lin-alg/NaiLoong?color=blue)](https://github.com/lin-alg/NaiLoong)
 
-奶-hub 是一个集中展示奶科生物表情包的网站，也能帮助入门 GitHub 的使用。表情图片统一托管于贡献者 Fork 仓库的 `image` 分支，主仓库仅做集中展示。
+奶-hub 是一个集中展示奶科生物表情包的网站，也能帮助入门 GitHub 的使用。原始表情图片统一托管于贡献者 Fork 仓库的 `image` 分支，网站展示使用主仓库 `preview` 分支中的轻量预览图。
 
 ## 🧭 按你的兴趣开始
 
@@ -24,7 +24,8 @@
 - 搜索按 <kbd>Enter</kbd> 执行，标题 + 标签一起匹配，`/` 键唤起搜索框，搜完自动滚到表情库
 - 动图 / 静态图分页，每页 4 / 8 / 16 / 32 / 64 条可选，偏好会记在本地
 - 标签按维度分组筛选，侧边栏与 Tab 的计数跟随搜索结果更新
-- 图片懒加载；GitHub 图片自动探测直连 / gh-proxy 等代理的连通性，选能通的路走，失败逐路回退，最后才换兜底图
+- 图片懒加载；网站展示 `preview` 分支中的小尺寸 WebP，保留 PNG/GIF 透明度，下载按钮才访问 Fork 中的原图
+- GitHub 图片自动探测直连 / gh-proxy 等代理的连通性，选能通的路走，失败逐路回退，最后才换兜底图
 - PR 上 CI 运行数据校验、标签解析测试和重复 URL 检查
 
 ## 🗂️ 目录结构
@@ -35,7 +36,8 @@ NaiLoong/
 │   ├── workflows/
 │   │   ├── pr-check.yml             # PR 数据校验与测试
 │   │   ├── deploy.yml               # GitHub Pages 自动化发布
-│   │   └── meme-hash.yml            # 图片哈希去重、认领和归档
+│   │   ├── meme-hash.yml            # 图片哈希去重、认领和归档
+│   │   └── generate-previews.yml    # 合并 PR 后生成预览图
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── config.yml               # 引导到投稿帖或项目反馈模板
 │   │   └── project_feedback.md     # 网站问题与项目建议模板
@@ -50,6 +52,7 @@ NaiLoong/
 ├── docs/                            # 按人群拆分的贡献与开发指南
 ├── scripts/validate_data.py         # 可本地运行的数据结构校验器
 ├── scripts/meme_hash.py              # 图片哈希缓存和投稿状态自动化
+├── scripts/generate_previews.py      # 合并 PR 后生成轻量 WebP 预览图
 ├── tests/                            # 数据校验、标签解析、图片 URL 和哈希测试
 ├── hash.txt                          # 已归档图片的 SHA-256 哈希列表
 ├── assets/
@@ -107,7 +110,7 @@ python -m http.server 8080
 | :--- | :--- | :--- |
 | `title` | string | 表情名称，必填 |
 | `tags` | number[] 或 object | 数组按 `tags.json` 标签顺序逐维填写，可用 `null` 表示未知；也支持 `{ "smile": 2 }` 形式的对象 |
-| `url` | string | 使用自己公开 Fork 的紧凑格式 `用户名/<图片commit SHA>/文件路径`，也可写完整 blob/RAW URL；必须固定到上传图片时的 commit，不使用会变化的 `image` 分支链接 |
+| `url` | string | 使用自己公开 Fork 的紧凑格式 `用户名/<图片commit SHA>/文件路径`，也可写完整 blob/RAW URL；必须固定到上传图片时的 commit，不使用会变化的 `image` 分支链接。合并后由 Action 按此地址生成预览图，投稿者不用填写预览地址 |
 
 ### 3. 标签表 `tags.json`
 
@@ -132,6 +135,18 @@ python -m http.server 8080
 所以 `"tags": [2, 0, 1]` = 大笑 + 老少咸宜 + 日常；`[2, null, 1]` 表示年龄限制暂未确定。维度内序号、标签名称都查看该角色自己的 `tags.json`。
 
 维度内序号是非负整数；维度名和标签文字应非空且不能重复。修改维度或已有标签时，先检查同角色所有数据文件，避免旧序号改变含义。
+
+### 4. 预览图与原图
+
+合并到 `main` 的数据 PR 会触发 `Generate Meme Previews` workflow。Action 从合并后的数据中找出新增或替换的图片，读取贡献者 Fork 的固定 commit 原图，取 GIF 首帧或静态图，生成最长边不超过 300 像素且严格小于 10 KiB 的 WebP，并保留 PNG/GIF 的透明度，写入主仓库的 `preview` 分支。
+
+预览分支的目录保持角色和分类层级，不扁平化文件名：
+
+```text
+previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp
+```
+
+网页卡片只加载这里的 WebP；卡片右上角的下载按钮仍然指向 `url` 中的原图。已有条目的预览图可由维护者按同一目录规则手动提交；自动化只处理之后合并的新 PR。
 
 ## 🤝 贡献与维护
 

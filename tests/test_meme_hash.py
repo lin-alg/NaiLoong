@@ -1,5 +1,14 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+from scripts.generate_previews import (
+    MAX_PREVIEW_BYTES,
+    added_preview_entries,
+    convert_to_preview,
+    new_preview_entries,
+    preview_relative_path,
+)
 from scripts.meme_hash import (
     added_canonical_urls,
     find_duplicates,
@@ -12,6 +21,79 @@ from scripts.meme_hash import (
 
 
 class MemeHashTests(unittest.TestCase):
+    def test_new_preview_entries_reads_the_merged_tree(self):
+        commit_a = "a" * 40
+        commit_b = "b" * 40
+        old_entry = {"title": "旧图", "url": f"contributor/{commit_a}/meme.gif"}
+        new_entry = {"title": "新图", "url": f"contributor/{commit_b}/nested/meme.png"}
+
+        class FakeGitHub:
+            def read_contents(self, path, ref):
+                if (path, ref) != ("data/manifest.json", "merge"):
+                    raise AssertionError("unexpected manifest request")
+                return (
+                    '[{"id":"naiwa","subcategories":[{"id":"animated",'
+                    '"file":"naiwa/animated.json"}]}]',
+                    None,
+                )
+
+            def get_pr_files(self, number):
+                if number != 12:
+                    raise AssertionError("unexpected PR number")
+                return [{"filename": "data/naiwa/animated.json", "status": "modified"}]
+
+            def pr_file_json(self, repository, path, ref):
+                if repository != "lin-alg/NaiLoong" or path != "data/naiwa/animated.json":
+                    raise AssertionError("unexpected data request")
+                if ref == "base":
+                    return [old_entry]
+                if ref != "merge":
+                    raise AssertionError("unexpected merge ref")
+                return [old_entry, new_entry]
+
+        result = new_preview_entries(
+            FakeGitHub(),
+            {
+                "number": 12,
+                "base": {"ref": "main", "sha": "base"},
+                "merge_commit_sha": "merge",
+            },
+        )
+        self.assertEqual(result, [{"role": "naiwa", "category": "animated", "entry": new_entry}])
+
+    def test_preview_path_preserves_role_category_and_source_tree(self):
+        commit = "b" * 40
+        self.assertEqual(
+            preview_relative_path(
+                "naiwa",
+                "animated",
+                f"contributor/{commit}/assets/memes/laugh.gif",
+            ),
+            f"previews/naiwa/animated/contributor/{commit}/assets/memes/laugh.webp",
+        )
+
+    def test_added_preview_entries_ignore_title_only_changes(self):
+        commit_a = "a" * 40
+        commit_b = "b" * 40
+        base = [{"title": "旧标题", "url": f"contributor/{commit_a}/meme.gif"}]
+        same_image = [{"title": "新标题", "url": f"contributor/{commit_a}/meme.gif"}]
+        replacement = [{"title": "替换图片", "url": f"contributor/{commit_b}/meme.gif"}]
+        self.assertEqual(added_preview_entries(base, same_image), [])
+        self.assertEqual(added_preview_entries(base, replacement), replacement)
+
+    def test_preview_converter_keeps_result_strictly_below_limit(self):
+        calls = []
+
+        def fake_convert(source_path: Path, output_path: Path, side: int, quality: int):
+            calls.append((side, quality))
+            output_path.write_bytes(b"x" * (MAX_PREVIEW_BYTES + 1 if side == 300 else 99))
+
+        with patch("scripts.generate_previews._convert_once", side_effect=fake_convert):
+            result = convert_to_preview(b"source")
+
+        self.assertLess(len(result), MAX_PREVIEW_BYTES)
+        self.assertEqual(calls[-1][0], 270)
+
     def test_parse_hash_file_accepts_blank_lines_and_rejects_bad_values(self):
         self.assertEqual(parse_hash_file("\n" + "a" * 64 + "\n"), {"a" * 64})
         with self.assertRaisesRegex(Exception, "line 1"):

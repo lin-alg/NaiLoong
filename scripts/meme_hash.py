@@ -12,6 +12,7 @@ import json
 import os
 import re
 import secrets
+import subprocess
 import sys
 import time
 from collections import Counter
@@ -176,12 +177,37 @@ def github_image_url(url: str) -> str | None:
         raise BotError(errors[0])
     if canonical.startswith("assets/placeholders/"):
         return None
-    parsed = urlsplit(canonical)
-    segments = parsed.path.split("/")
-    owner, repository = segments[1:3]
-    commit = segments[4]
-    path = "/".join(segments[5:])
-    return f"https://raw.githubusercontent.com/{owner}/{repository}/{commit}/{path}"
+
+    path_clean = urlsplit(canonical).path.lstrip("/")
+    parts = path_clean.split("/")
+    default_repo = REPOSITORY.split("/")[-1]
+
+    # 适配: <Github用户名>/<40位commit>/assets/memes/xxx.gif
+    if (
+        len(parts) >= 3
+        and len(parts[1]) == 40
+        and all(c in "0123456789abcdefABCDEF" for c in parts[1])
+    ):
+        owner = parts[0]
+        commit = parts[1]
+        repo = default_repo
+        file_path = "/".join(parts[2:])
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{file_path}"
+
+    # 适配完整 GitHub 链接: owner/repo/raw(或blob)/commit/path
+    if len(parts) >= 5 and parts[2] in {"raw", "blob"}:
+        owner, repo = parts[0], parts[1]
+        commit = parts[3]
+        file_path = "/".join(parts[4:])
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{file_path}"
+
+    # 适配标准的 raw 链接: owner/repo/commit/path
+    if len(parts) >= 4:
+        owner, repo, commit = parts[0], parts[1], parts[2]
+        file_path = "/".join(parts[3:])
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{commit}/{file_path}"
+
+    raise BotError(f"无法解析图片 URL 格式: {canonical}")
 
 
 class GitHub:
@@ -240,6 +266,11 @@ class GitHub:
         text = base64.b64decode(item.get("content", "")).decode("utf-8")
         return text, item.get("sha")
 
+    def read_content_item(self, path: str, ref: str):
+        quoted_path = quote(path, safe="/")
+        query = urlencode({"ref": ref})
+        return self.get_optional(f"/repos/{self.repository}/contents/{quoted_path}?{query}")
+
     def write_contents(self, path: str, branch: str, text: str, message: str, sha=None):
         payload = {
             "message": message,
@@ -250,6 +281,27 @@ class GitHub:
             payload["sha"] = sha
         quoted_path = quote(path, safe="/")
         return self.request("PUT", f"/repos/{self.repository}/contents/{quoted_path}", payload)
+
+    def write_binary_contents(self, path: str, branch: str, content: bytes, message: str, sha=None):
+        payload = {
+            "message": message,
+            "content": base64.b64encode(content).decode("ascii"),
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        quoted_path = quote(path, safe="/")
+        return self.request("PUT", f"/repos/{self.repository}/contents/{quoted_path}", payload)
+
+    def get_ref(self, ref: str):
+        return self.get_optional(f"/repos/{self.repository}/git/ref/{quote(ref, safe='/')}")
+
+    def create_ref(self, ref: str, sha: str):
+        return self.request(
+            "POST",
+            f"/repos/{self.repository}/git/refs",
+            {"ref": f"refs/{ref}", "sha": sha},
+        )
 
     def load_state(self):
         state_path = ROOT / STATE_PATH
@@ -344,6 +396,20 @@ class GitHub:
             return []
         return [entry for entry in parsed if isinstance(entry, dict)]
 
+    def read_blob_json(self, blob_sha):
+        if not blob_sha:
+            return []
+        item = self.request("GET", f"/repos/{self.repository}/git/blobs/{blob_sha}")
+        if item.get("encoding") != "base64":
+            raise BotError(f"Could not read PR file blob as base64: {blob_sha}")
+        try:
+            parsed = json.loads(base64.b64decode(item.get("content", "")))
+        except (ValueError, json.JSONDecodeError) as exc:
+            raise BotError(f"PR file blob is invalid JSON: {blob_sha}") from exc
+        if not isinstance(parsed, list):
+            return []
+        return [entry for entry in parsed if isinstance(entry, dict)]
+
     def issue_comment(self, issue_number, body):
         return self.request(
             "POST",
@@ -413,12 +479,17 @@ def fetch_image_bytes(url: str, attachment=False) -> bytes:
         raise BotError("Fork images must be fetched from raw.githubusercontent.com")
 
     headers = {"User-Agent": "NaiLoong-meme-hash-bot", "Accept": "image/*"}
+    if not attachment:
+        token = os.environ.get("GITHUB_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+            
     request = Request(url, headers=headers)
     try:
         with urlopen(request, timeout=25) as response:
             final = urlsplit(response.geturl())
             final_host = (final.hostname or "").lower()
-            allowed = ATTACHMENT_HOSTS if attachment else {"raw.githubusercontent.com"}
+            allowed = ATTACHMENT_HOSTS if attachment else {"raw.githubusercontent.com", "objects.githubusercontent.com"}
             if final.scheme != "https" or final_host not in allowed:
                 raise BotError("GitHub image request redirected to an unsupported host")
             content_length = response.headers.get("Content-Length")
@@ -484,7 +555,15 @@ def new_data_urls(github: GitHub, pull_request):
             continue
         base_filename = item.get("previous_filename", filename)
         base_entries = github.pr_file_json(REPOSITORY, base_filename, base["sha"])
-        head_entries = github.pr_file_json(head_repo, filename, head["sha"])
+        if item.get("status") == "removed":
+            head_entries = []
+        else:
+            try:
+                head_raw = subprocess.check_output(["git", "show", f"FETCH_HEAD:{filename}"]).decode("utf-8")
+                head_entries = [e for e in json.loads(head_raw) if isinstance(e, dict)]
+            except Exception as exc:
+                print(f"::warning::读取 PR JSON 文件失败: {exc}")
+                head_entries = []
         old_urls = canonical_urls_from_entries(base_entries)
         new_urls_in_head = canonical_urls_from_entries(head_entries)
         additions.extend(added_canonical_urls(old_urls, new_urls_in_head))
@@ -758,6 +837,14 @@ def process_pull_request(github: GitHub, pull_request):
     if (pull_request.get("base") or {}).get("ref") != "main":
         print(f"PR #{number} does not target main; hash check is skipped.")
         return
+    try:
+        subprocess.run(
+            ["git", "fetch", "--depth=1", "origin", f"pull/{number}/head"],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise BotError(f"无法拉取 PR #{number} 的 Git 数据: {exc.stderr.decode()}")
     urls = new_data_urls(github, pull_request)
     claim_matches = CLAIM_PATTERN.findall(pull_request.get("body") or "")
     if not urls and not claim_matches:
@@ -803,6 +890,9 @@ def process_pull_request(github: GitHub, pull_request):
         issue_comment_id = None
         if claim_code:
             issue_comment_id, issue_record = find_claim_comment(state, claim_code)
+            print(f"::notice::[DEBUG] urls = {urls}")
+            print(f"::notice::[DEBUG] PR hashes = {hashes}")
+            print(f"::notice::[DEBUG] Issue expected hashes = {issue_record.get('hashes', []) if issue_record else 'None (未找到认领记录)'}")
             if issue_record is None:
                 release_previous()
                 result.update(ok=False, reason="The issue claim code is unknown or expired.")
