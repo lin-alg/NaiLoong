@@ -1,245 +1,404 @@
 # GitHub 新手投稿教程
 
-本教程带你把[投稿区评论里的图片](https://github.com/lin-alg/NaiLoong/issues/1)转存到自己的 Fork，并提交对应的数据 PR。评论投稿者不需要 Fork；需要完成转存和数据记录的人按本教程操作即可。
+本教程适合想入门 GitHub 的新手，或者整理合并 [投稿区](https://github.com/lin-alg/NaiLoong/issues/1) 表情的贡献者。
 
-## 先理解这几个词
+> 有任何疑问，可以将这个文档和你的问题喂给AI，如果还是无法解答，可以直接提Issue咨询
 
-- **仓库（repository）**：项目文件所在的位置。
-- **Fork**：把原仓库复制到自己的 GitHub 账号下。你只能直接推送到自己的 fork。
-- **本地仓库**：电脑上的工作副本。
-- **分支（branch）**：一条独立的改动线。`main` 是默认分支；每个任务使用自己的工作分支。
-- **Commit**：把一组本地改动保存成一个有说明的版本。
-- **Push**：把本地分支上传到 GitHub。
-- **Pull Request（PR）**：请求把你 fork 的工作分支合并进原仓库。
-- **origin**：通常指你自己的 fork；**upstream**：原仓库 `lin-alg/NaiLoong`。
+如果你只想在投稿区上传表情，看 [社区投稿指南](meme-submissions.md) 即可。如果你是第二次投稿，请看 [再次投稿步骤](#再次投稿怎么操作) 。
 
-## 常用命令速查
+## 一. 初识 Git
 
-先看状态，再进行操作；这些命令都在 Git Bash 的仓库目录中运行：
+>如果你已经了解 Git 的使用，可以跳到[安装-git-并创建-fork](#二-安装-git-并创建-fork)
 
-| 命令 | 用途 |
-| :--- | :--- |
-| `git status` | 查看当前分支、未提交改动和冲突 |
-| `git branch --list` | 查看本地分支；`git branch -a` 也显示远程分支 |
-| `git switch main` | 切换到已有的 `main` 分支 |
-| `git switch -c my-branch` | 创建并切换到新分支 |
-| `git remote -v` | 查看 `origin` / `upstream` 地址 |
-| `git fetch upstream` | 获取原仓库的最新记录，不改当前文件 |
-| `git add <文件>` | 选择要放进下一次 commit 的文件 |
-| `git diff` / `git diff --staged` | 查看未暂存 / 已暂存的改动 |
-| `git commit -m "说明"` | 保存已暂存的改动 |
-| `git push -u origin my-branch` | 首次上传分支并设置后续默认远程；以后可用 `git push` |
-| `git pull --ff-only upstream main` | 获取并快进合并原仓库的 `main`；本地分叉时会停止而不是擅自覆盖 |
-| `git log --oneline --graph --all` | 查看分支和提交历史 |
+Git 本质上就是一个用于保存项目代码的不同版本，并追踪版本历史的工具。
 
-常见顺序是 `status → add → diff --staged → commit → push`。`fetch` 只获取远程信息；`pull` 会获取并尝试合并。不要使用 `git push --force` 来处理普通投稿问题。
+### 1. 本地操作：add 和 commit
 
-## 1. 安装 Git 并 Fork
+我们在本地写了一段代码很满意，想要记录这次修改，就需要保存一个新的版本，这个动作叫 **`commit`（提交）**。我们首先想到的是把整个项目文件夹添加为一个压缩包并用版本号命名，但是这样不仅占空间，而且还不方便管理。所以 commit 只记录文件变化了的部分。
 
-1. Windows 安装 Git for Windows，安装完成后从开始菜单打开 **Git Bash**。本地运行项目校验器还需要 Python 3.9 或更新版本；没有 Python 也可以先完成投稿，PR 上的 CI 会自动检查。
-2. 登录 GitHub，打开本仓库并点右上角 **Fork → Create fork**。Fork 的所有者选自己的账号，并保持仓库为公开状态。
-3. GitHub 上的仓库地址会是 `https://github.com/你的用户名/NaiLoong`。后面命令里的 `<你的用户名>` 要换成真实用户名，不要保留尖括号。
+我们不一定想把当前改动的所有文件都一次性存进去，可能只想存一部分，剩下的留到下个版本再提交。这时候就需要先用 **`add`** 把想要提交的文件放到“暂存区”，然后再 `commit` 暂存区里的修改。
 
-> 截图占位：GitHub 仓库右上角的 Fork 菜单与创建 Fork 页面。
+---
 
-## 2. 下载自己的 Fork 并设置远程地址
+### 2. 远程同步：push 和 pull
 
-在 Git Bash 中运行：
+代码只保存在自己电脑上还不保险，或者要跟别人协作，就需要用到远程仓库（比如 GitHub）：
 
+- 我们需要把本地的 commit 上传到远程仓库，就 **`push`（推）**。
+- 我们需要把远程仓库的 commit 下载到本地，就 **`pull`（拉）**。
+
+---
+
+### 3. 多人协作与代码冲突
+
+假设我们和同事正在开发 GitHub 上的同一个项目，两个人同时 pull 了仓库，得到仓库 main 分支上的最新版本。
+
+main分支结构：
+```
+B --> A (B是最新的commit，指向A)
+```
+同事先改好代码，把本地的 `commit C` 推到了远程仓库。这时我们本地也做了一些改动想要提交 `commit D`，远程仓库就会迷糊：**“我到底是听他的，还是听你的？”**
+
+所以 Git 要求我们必须先 pull 下来同事的最新版本，在本地处理好冲突再上传。这时候我们常用的命令是：
 ```bash
-git clone https://github.com/<你的用户名>/NaiLoong.git
-cd NaiLoong
-git remote add upstream https://github.com/lin-alg/NaiLoong.git
-git remote -v
+git pull --rebase origin main
+```
+`--rebase` 的作用是将我们本地的 `commit D`直接“拔起来”，追加在他的 commit 后面。
+
+```
+D
+└ - C --> B --> A
+```
+此时 D 还未完全接在 C 上，会遇到两种情况：
+
+- **情况 1**：如果我们和另一个人修改的位置不同，Git 会自动处理好，历史上看起来就是先后发生的两个版本。
+  ```
+  D --> C --> B --> A
+  ```
+- **情况 2**：如果我们和另一个人修改了相同的地方（比如都改了 `main.py` 里的 A 函数），rebase 就会停下来红字提示冲突：
+  ```text
+  CONFLICT (content): Merge conflict in main.py
+  ```
+
+此时打开编辑器，会有类似这种标记：
+
+> ![代码冲突标记图](images/image0008.png)
+
+我们需要人工做决策：到底是保留他的、保留我们的，还是结合一下给出最终版本？现代编辑器都可以很方便地点击按钮来选择。
+
+处理完冲突并保存文件后，在终端输入 `git rebase --continue`（或者直接在VSCode等现代编辑器里点“继续”），直到所有冲突解决完毕，我们的 commit 就顺利接在最前面了。
+```
+  D --> C --> B --> A
 ```
 
-输出中 `origin` 应指向你的用户名，`upstream` 应指向 `lin-alg/NaiLoong`。如果提示 `upstream already exists`，不要重复添加，运行 `git remote -v` 检查现有地址即可。
+---
 
-首次提交前设置 Git 记录的署名（替换成你希望显示的名字和 GitHub 邮箱）：
+### 4. rebase 和 merge 有什么区别？
+
+你可能也听说过 `git merge`，它和 `rebase` 有什么区别呢？
+
+- **rebase（变基）**：能保持提交历史是**一条直线**。它把你的修改拆下来，放到目标分支的最新节点之后，看起来像是在最新版本上顺理成章做出的改动。
+- **merge（合并）**：会保留原始的分叉历史。它会新建一个特殊的“合并节点”`E`，把两个分叉再合并在一起。
+
+如图所示：
+```
+┌------D------┐
+↑             ↓
+E --> C ----> B --> A
+```
+
+---
+
+### 5. 团队协作进阶：Fork 与 Pull Request（PR）
+
+在实际 GitHub 开源项目或团队协作中，主仓库通常受到保护，大家不能直接往 `main` 分支上 `push` 代码。这时候的标准流程是：
+
+1. **Fork**：在 GitHub 页面上点击 Fork，把别人的主仓库完整复制一份到你自己的账号下。
+2. **修改并推送**：把代码 clone 到本地修改，commit 之后，push 到**你自己账号下的仓库（origin）**。
+3. **提 PR（Pull Request）**：去 GitHub 页面发起一个 Pull Request。这句话的意思其实就是向项目管理员喊话：“*我写好了新功能/修好了 Bug，请求（Request）你把我的代码拉（Pull）到你们的主仓库（upstream）里！*”
+4. 管理员审核通过后点击同意，你的代码就正式并入项目主干了。
+
+---
+
+### 术语速查
+
+- **仓库（repository）**：存放项目文件和所有版本修改记录的地方。
+- **Fork**：复制源仓库到自己的 GitHub 账号下。本文中 `origin` 指你自己的 Fork 副本，`upstream` 指原始的主仓库（如 `lin-alg/NaiLoong`）。
+- **分支（branch）**：一组独立的版本线。`main` 是默认的主分支。
+- **Commit**：把暂存区的修改保存为一个版本，你可以理解成拍了一张“快照”。
+- **Push**：把本地的新版本推送到远程 GitHub 仓库。
+- **Pull**：把远程仓库的新版本拉取合并到本地。
+- **Pull Request（PR）**：请求主仓库的维护者把你的分支修改合并到主仓库中。
+
+你会在自己的 Fork 仓库中使用两种分支：
+
+| 分支 | 用途 | 是否向主仓库发 PR |
+| :--- | :--- | :--- |
+| `image` | 长期保存原图 | 否 |
+| `meme/naiwa-laugh` 等工作分支 | 提交这次投稿的 JSON 记录 | 是，合并到主仓库 `main` |
+
+## 二. 安装 Git 并创建 Fork
+
+1. Windows 用户安装 [Git for Windows](https://git-scm.com/downloads/win) 。下文所介绍的命令都在 Git Bash 中运行。
+![下载Git](images/image0001.png)
+
+2. 登录 GitHub，打开 [lin-alg/NaiLoong](https://github.com/lin-alg/NaiLoong)，点击 **Fork → Create fork**。选项保持默认即可。
+![点击Fork](images/image0002.png)
+![创建Fork](images/image0003.png)
+
+
+## 三. 克隆 Fork 仓库并同步主仓库
+
+在你的 Fork仓库页面（注意不是主仓库！）点击"Code"，会弹出一个克隆链接，复制它：
+
+![alt text](images/image0004.png)
+
+（这里仅为示例，实际链接应为`https://github.com/<你的用户名>/NaiLoong.git`）
+
+在你的电脑上新建一个项目文件夹，然后在文件夹内右键，选择`Open Git Bash here`，打开窗口：
+
+![alt text](images/image0005.png)
+![alt text](images/image0006.png)
+
+图中的绿色字体代表我们当前的工作目录，黄色字体为当前仓库的分支（初始化仓库后才会显示）。
+
+在Git Bash窗口中依次执行以下命令：
+```bash
+git clone https://github.com/<你的用户名>/NaiLoong.git # 克隆仓库时会自动初始化仓库
+cd NaiLoong # 进入NaiLoong文件夹
+git remote add upstream https://github.com/lin-alg/NaiLoong.git # 添加主仓库到上游
+git remote -v # 查看当前 Git 仓库所关联的远程仓库地址
+```
+> 由于克隆下来的仓库可能不是根目录，所以需要`cd NaiLoong`进入根目录。
+
+![alt text](images/image0009.png)
+![alt text](images/image0007.png)
+`origin` 应指向自己的 Fork，`upstream` 应指向 `lin-alg/NaiLoong`。后面的fetch、push分别指拉取和推送代码的远程地址，默认是相同的。
+
+接着设置 commit 的署名，在 GitHub 的 **Settings → Emails** 处可以找到邮箱。
 
 ```bash
-git config --global user.name "你的名字"
+git config --global user.name "你的Github 用户名"
 git config --global user.email "你的 GitHub 邮箱"
 ```
 
-`git push` 首次认证时按 Git Credential Manager 打开的浏览器提示登录。不要把密码或访问令牌写进命令、文件或 Issue。
-
-> 截图占位：Git Bash 中 `git remote -v` 的 origin 和 upstream 输出。
-
-## 3. 更新本地 main
-
-开始前确认工作区干净：
+同步主仓库的最新内容：
 
 ```bash
 git status
-git fetch upstream
+git fetch upstream main
 git switch main
 git merge --ff-only upstream/main
 git push origin main
 ```
 
-此时先不要创建 JSON 工作分支；上传图片需要临时切换到 `image`，下一节会说明。若 `git merge --ff-only` 提示无法快进，先看[同步与冲突处理](#同步远程更改与解决冲突)，不要强行推送。
-
-## 4. 从投稿评论下载图片并转存
-
-第一类投稿者直接把图片上传在[共享投稿 Issue](https://github.com/lin-alg/NaiLoong/issues/1)的评论中。选中要整理的图片，打开原图并保存到电脑；评论附件链接只用于收集，不作为主站最终图片链接。
-
-图片和 JSON 记录分开提交，主仓库只需要收到 JSON 变更。图片单张不得超过 5 MB，建议压缩到 2 MB 以下。统一把图片上传到你公开 Fork 的 `image` 分支：
-
-```bash
-git switch main
-git switch -c image
-mkdir -p assets/memes
-cp "/c/Users/你的用户名/Downloads/meme.png" assets/memes/meme.png
-git add assets/memes/meme.png
-git diff --staged --stat
-git commit -m "add meme image"
-git push -u origin image
+`status` 查看当前分支和改动，`fetch` 获取主仓库记录（仅获取main分支），`switch`切换分支，`merge --ff-only` 将刚才下载的 upstream/main 最新代码合并到当前的本地 main 分支，且强制使用快进模式。`push` 的作用是将更新推送到自己的远程仓库。首次 push 时，需按浏览器提示登录 GitHub 账号。
+```
+PS. Git的快进模式是什么？
+ff-only的全称是fast-forward-only，指当本地有commit的时候，不允许合并。它未考虑是否能够自动 rebase。你也可以直接git switch main 再 git pull --rebase upstream main（等价于git fetch upstream main + git rebase upstream/main）。
 ```
 
-Git Bash 下 Windows 的 `C:\Users\名字\Downloads\文件.png` 对应 `/c/Users/名字/Downloads/文件.png`。如果 `image` 分支已存在，运行 `git switch image`，再运行 `git pull --ff-only origin image` 同步已有图片，不要再次创建分支。Fork 请一直保持公开，也不要删除；站点通过固定的图片 commit 读取图片。
+## 四. 上传图片到 `image` 分支
 
-上传后在 Git Bash 运行 `git rev-parse HEAD` 记下这次图片上传 commit 的 40 位 SHA，再打开 Fork 中的图片文件，将地址中的 `image` 分支替换为这个 SHA。链接形如：
+准备静态图片或 GIF，单张严格不超过 **5 MB**，建议小于 2 MB。
+
+处理投稿区图片时，选择“⚪ 未处理”的评论，右键另存为每张表情图片，保证下载的是原图，否则图片检查可能不通过。你也可以不从投稿区选图，而是上传自己的表情。
+
+下面以 `meme.gif` 为例，介绍上传图片到 image 分支的流程。（image分支不要合并到其它分支！）
+
+首先切换到image分支：
+```bash
+git switch -c image
+```
+在 `assets` 文件夹内建立 `memes` 文件夹，将 `meme.gif` 放进去，多个表情同理。
+
+然后 add 所有表情文件并提交。
+```bash
+git add assets/memes/meme.gif
+git status
+git commit -m "feat: 添加新表情文件" # -m的意思是这次commit的说明
+git push -u origin image # -u为分支设置默认推送地址，之后可以直接用git push。
+git rev-parse HEAD # 获取这次commit的唯一标识，即哈希值。你也可以用git log命令，并记下最新的哈希。
+```
+
+**记下最后一条命令输出的 40 位 字符串**，这是图片上传 commit 的编号，供下一步的图片 URL 使用。图片URL的格式为：
 
 ```text
-你的用户名/<图片commit SHA>/assets/memes/meme.png
+你的GitHub用户名/<40位commit哈希>/assets/memes/meme.gif
 ```
 
-`image` 分支只作为图床，**不对原仓库发 PR，也不合并回原仓库**。本站只接受这类 Fork 的图片链接，不使用其他图床。
+Github 用户名请填用户名而非昵称。比如下图括号中的名字即为用户名，左侧为昵称。
 
-> 截图占位：在自己的 Fork 中切换到 image 分支、上传图片并复制 blob 地址。
+![账号截图](images/image0010.png)
 
-## 5. 新增表情记录
+已有 `image` 分支时，无需重复创建，按 FAQ 中的 [再次投稿步骤](#再次投稿怎么操作) 操作即可。
 
-回到最新 `main`，创建独立的 JSON 工作分支：
+> ![alt text](images/image0011.png)
+
+> 如图，commit 的哈希值为 8b5ba9fc738254dd52ffa08106c87c44ad54df1c
+## 五. 创建工作分支并填写 JSON 字段
+
+> 这里的其实可以用可视化工具操作，目前还未做好，稍微麻烦大家了~
+
+回到主仓库的最新数据，创建这次投稿的工作分支：
 
 ```bash
 git switch main
 git fetch upstream
 git merge --ff-only upstream/main
-git push origin main
 git switch -c meme/naiwa-laugh
 ```
 
-### 认识表情数据和标签
+`meme/naiwa-laugh` 是示例分支名，可以换成描述本次投稿的分支名字。
 
-- `data/manifest.json` 列出角色，以及每个角色有哪些分类文件。
-- `data/naiwa/` 是奶蛙数据目录；`data/naidan/` 是奶蛋数据目录。
-- `animated.json` 是动图分类文件，`static.json` 是静态图分类文件；`tags.json` 定义这个角色的标签维度和每个维度可选的值。
-- 条目里的 `title` 是名称，`url` 是刚才复制的 Fork 图片链接，`tags` 按 `tags.json` 中维度的顺序为每个维度填写一个本地序号。
+用文本编辑器打开 `data/manifest.json`，找到角色及其分类文件。例如奶蛙动图写入 `data/naiwa/animated.json`，奶蛙静态图写入 `data/naiwa/static.json`。
 
-打开对应分类文件。奶蛙的动图是 `data/naiwa/animated.json`，静态图是 `data/naiwa/static.json`；奶蛋则把目录名改成 `naidan`。在 JSON 数组中新增一项：
+分类文件是一个数组，格式如下：
+
+```json
+[
+  {
+    "title": "奶蛙狂笑",
+    "url": "你的GitHub用户名/<40位图片commit SHA>/assets/memes/meme.gif",
+    "tags": [2, 0, 0]
+  },
+  {
+    "title": "xxxx",
+    "url": "xxxx",
+    "tags": [1,null,0]
+  }
+  ...（省略)
+]
+```
+
+已有记录时，在数组末尾追加一个大括号对象，给前一项补逗号；最后一项后面不加逗号。把标题和 URL 换成实际内容就好。
+
+每个角色都有一个 `tags.json`。以奶蛙为例：
 
 ```json
 {
-  "title": "奶蛙狂笑",
-  "tags": [2, 0, 0],
-  "url": "你的用户名/<图片commit SHA>/assets/memes/meme.png"
+  "smile": {
+    "0": "轻松绷住",
+    "1": "憋笑",
+    "2": "大笑"
+  },
+  "age limit": {
+    "0": "老少咸宜",
+    "1": "朋友整活",
+    "2": "重口"
+  },
+  "artistic merit": {
+    "0": "下里巴人",
+    "1": "日常",
+    "2": "阳春白雪"
+  }
 }
 ```
+奶蛙目前有三种标签，每种标签都可以选择对应的值。
+所以 `[2, 0, 0]` 表示的是“大笑”，“老少皆宜”，“下里巴人”。
 
-- `title` 简洁描述表情；不要为改善旧图而重复增加同一个条目。
-- `tags` 按维度顺序填写本地序号，不要把所有标签展平成一串。例子中 `[2, 0, 0]` 表示 smile 维度选序号 2、age limit 选序号 0、artistic merit 选序号 0。暂时无法判断的维度写 `null`，如 `[2, null, 0]`；也可用对象写法 `{"smile": 2, "age limit": null, "artistic merit": 0}`。每个序号的文字含义查看该角色的 `tags.json`。标签不确定时可在 PR 中请维护者协助，维护者也可以直接修改 PR 分支中的标签。
-- `url` 换成 `你的用户名/<40位commit SHA>/<文件路径>` 紧凑地址；也可使用完整的 GitHub blob/RAW 地址。打开图片所在 commit 或文件历史取得 SHA；只写地址，不要写 `![描述](地址)`。不要使用会随 `image` 分支后续提交改变内容的链接。
-- JSON 数组中，前一项后面要有逗号，最后一项后面不能有逗号。保存后运行 `python scripts/validate_data.py`；也可以看[项目指南的本地检查](project-maintainers-guide.md#本地运行与检查)。
+标签的值暂时不确定时写 `null`。例如 `[2, 0, null]` 表示你暂时还不知道这张表情包的艺术价值是怎么样的。不过最好是所有标签都选择一个固定的值。
 
-检查本次改动并提交：
+如果你安装了 Python ，保存后运行 `python scripts/validate_data.py` 检查数据是否有错误。
+
+## 六. 提交并创建 PR
+
+下面以奶蛙动图为例；文件路径和分支名要换成自己的实际值。
 
 ```bash
 git status
-git diff
 git add data/naiwa/animated.json
-git diff --staged
-git commit -m "add 奶蛙狂笑表情"
+git status
+git commit -m "feat: 添加奶蛙狂笑表情"
 git push -u origin meme/naiwa-laugh
 ```
 
-如果 GitHub 登录认证正常，推送后页面会显示 **Compare & pull request**。
+确认这里只包含本次 JSON 修改，再 commit 和 push。
 
-> 截图占位：编辑 JSON 前后对比，以及 GitHub 上的 Compare & pull request 按钮。
+1. 在浏览器打开自己的 Fork 仓库，点击 **Compare & pull request**。没有这个按钮时，进入 **Pull requests → New pull request**。
+2. 目标选择 `lin-alg/NaiLoong` 的 `main`，来源选择自己 Fork 的 `meme/naiwa-laugh` 工作分支。
+3. 查看 **Files changed**，确认只有JSON的改动，图片文件未修改。
+4. 写明角色、分类和图片来源（如必要）。如果是整理投稿区的表情，请把改评论顶部的 `MEME-CLAIM-...` 口令复制粘贴进 PR 描述。确保**一个 PR 只认领一条评论**，并已收录该评论的全部图片。
+5. 点击 **Create pull request**，等待 Github Action 检查代码。如有报错时查看详情，按 [FAQ](#pr-检查失败怎么修改) 重新更改代码，然后commit。
 
-## 6. 创建 Pull Request
+维护者审核并合并后，网站会自动生成预览图并更新。投稿者不用拉取仓库的`preview`分支。
 
-1. 打开本仓库或你刚推送分支的 GitHub 页面，点 **Compare & pull request**。
-2. 检查目标是原仓库 `lin-alg/NaiLoong` 的 `main`，来源是你 fork 的 `meme/...` 工作分支。不要选择 `image` 分支。
-3. 标题写明新增或修订了什么；正文可说明角色、分类和图片来源。预览图由合并后的 workflow 生成，不需要在 PR 中填写。
-4. 如果你是在处理投稿区评论中的图片，将评论顶部机器人生成的 `MEME-CLAIM-...` 口令原样复制到 PR 描述中。一个 PR 应完整处理该评论中的全部图片。
-5. 看 **Data Linter** 和 **Meme Image Hash Check** 检查是否通过。失败时打开检查详情，按报错文件和条目序号修正，然后在同一分支继续 `add → commit → push`；PR 会自动更新。
-6. 维护者审阅并合并后，预览图 workflow 会从你的固定 commit 原图生成轻量 WebP 并存入主仓库的 `preview` 分支，同时保留 PNG/GIF 透明度。网站卡片加载预览图，下载按钮仍获取你 Fork 中的原图；不要把 `preview` 分支或 `previews/` 目录加入投稿 PR。
+## 修订已有表情
 
-> 截图占位：PR 的 base / compare 分支选择和 Data Linter 检查结果。
+从最新 `main` 分支创建工作分支，在 `data/` 中搜索标题或 URL，找到原条目后修改。
 
-## 修订别人的表情
+- 只改标题或标签：保留原来的 `url`。
+- 替换自己或他人的图片（比如原图不够清晰，原Fork仓库失效等）：上传新图到自己的 `image` 分支，再把原 URL 地址中的用户名和哈希值修改为自己的 GitHub 用户名和本次新 commit 的哈希值。
+- 在 PR 描述中说明修改原因。
 
-修订已有图片清晰度、标题或标签时，先在 `data/` 中搜索标题或图片 URL，找到对应的那条记录并修改它，不要再追加一条重复记录。
+## 常见问题 / FAQ
 
-- 只改标题或标签：保留现有 `url`，只改对应 JSON 项。
-- 替换图片：把新图放在自己的公开 `image` 分支，更新原条目的 `url`。不要改动原作者 fork，也不要把图片分支合并进主仓库。
-- 保留记录中已有的来源信息；PR 说明为什么要改，并提供新旧图片对比。
-- 从最新的原仓库 `main` 建立你自己的工作分支，通过 PR 提出修改。维护者会检查是否应采纳以及如何保留署名。
+### 合并后可以删除 JSON 工作分支吗？
 
-## 同步远程更改与解决冲突
+可以，它已经完成这次投稿的合并。可在自己的 Fork 分支列表中删除 GitHub 上的 `meme/...` 分支；PR 页面默认提供 **Delete branch** 按钮。保留它也没有影响，下一次使用新的工作分支即可。
 
-多人改了同一条 JSON，或你的 fork 落后于原仓库时，Git 不能自动判断哪边内容正确，这就是冲突。先运行 `git status`，并确认自己的工作已 commit；不要在冲突文件上继续盲目编辑。
+`image` 分支请**长期保留并保持公开**。它们是网站的原图来源，请不要把该分支合并到其它分支或删除（这对这个项目很重要）。
 
-### 先同步原仓库
+### 再次投稿怎么操作？
 
-```bash
-git fetch upstream
-git switch meme/naiwa-laugh
-git merge upstream/main
-```
-
-如果没有冲突，检查 `git status` 后运行 `git push`，PR 会更新。如果有冲突，Git 会列出文件。打开冲突文件，会看到类似标记：
-
-```text
-<<<<<<< HEAD
-你当前分支上的版本
-=======
-原仓库 main 中的版本
->>>>>>> upstream/main
-```
-
-手工整理成最终想保留的内容，并删除 `<<<<<<<`、`=======`、`>>>>>>>` 标记。JSON 冲突要确认逗号、括号和数组位置正确；优先保留双方不同且有价值的表情记录，不要整段覆盖他人的新记录。保存后运行：
+不用重新 Fork 仓库。在本地仓库中确认没有未提交改动，然后更新 `main`：
 
 ```bash
 git status
-python scripts/validate_data.py
-git add data/naiwa/animated.json
-git commit -m "merge upstream changes"
-git push
+git switch main
+git pull --rebase upstream main
+git push origin main
+git switch image
+git pull --ff-only origin image
 ```
 
-合并冲突解决后需要一次 commit；如果你还没有开始解决且想放弃这次合并，可运行 `git merge --abort` 回到合并前状态。
+如果 `image` 分支只在 GitHub 上存在，本地还没有，先运行 `git fetch origin`，再用 `git switch --track origin/image` 代替最后两条命令。
 
-### 本地有未提交的改动
+将新图片复制到 `assets/memes` 中，然后执行第 3 步中的 `add → commit → push → rev-parse HEAD` 流程，记下新哈希。再从最新 `main` 建立一个名字不同的工作分支继续。
 
-先用 `git diff` 查看并保存自己的内容。可以先提交到工作分支，再同步 `upstream/main`。若改动暂时不适合提交，可暂存起来：
+### GitHub 上删除工作分支后，本地分支也会消失吗？
+
+不会。本地仍保留自己的副本，可以先留着。想删除时，确认 PR 已合并、分支上没有其他要保留的工作，运行：
 
 ```bash
-git stash push -m "meme work in progress"
-git fetch upstream
 git switch main
+git fetch upstream
 git merge --ff-only upstream/main
-git switch meme/naiwa-laugh
-git merge main
-git stash pop
+git branch -d meme/naiwa-laugh
 ```
 
-`stash pop` 也可能发生冲突，按上一节方式解决。不要用 `git reset --hard`、`git clean` 或强制推送来“清理”问题；这些命令可能丢失尚未保存的工作。
+把 `meme/naiwa-laugh` 换成实际名称。如果 Git 提示分支尚未合并，就先保留，不必为了清理而强制删除。
 
-## 常见问题
+### 不会填写角色标签怎么办？
 
-| 现象 | 处理方法 |
+无法判断的标签填写 `null`，在 PR 中说明。也可以使用对象格式，例如 `"tags": { "smile": "大笑", "age limit": null }`；省略的标签视为未知。
+
+### PR 检查失败怎么修改？
+
+打开检查详情，找到报错文件和条目。
+1. JSON 错误：重点检查逗号、引号和括号。
+2. 标签错误：对照检查该角色的 `tags.json`。
+
+在同一工作分支上修改后运行命令：
+  ```bash
+  git add data/naiwa/animated.json
+  git diff --staged
+  git commit -m "fix: 修复问题以通过PR检查"
+  git push
+  ```
+原 PR 会根据新的commit自动检查，不用重新创建PR。
+如果提示认领图片不匹配，确认PR描述中只填了一个正确的MEME-CLAIM口令，收录了该评论全部原图，且没有压缩、转码或附加其他额外图片。
+报错中的 `entry #0` 是数组第 1 项，`entry #1` 是第 2 项，以此类推。
+
+如果问题仍未解决，请提Issue咨询。
+
+### 本地有未提交改动，还能同步或切换分支吗？
+
+先运行 `git status` 和 `git diff`。如果是当前工作分支要提交的内容，先 `add` 和 `commit`；暂时不想提交，可以用 `git stash` 命令保存。完成同步并回到原分支后，再运行 `git stash pop` 恢复工作区。
+
+### 同步 `main` 到自己的origin时提示不能快进，或推送被拒绝怎么办？
+
+只要确认本地 main 分支没有未备份的新表情代码（改动都在 image 或工作分支上），我们可以用 reset重置 Fork 的 main 分支：
+
+```bash
+git switch main
+git fetch upstream
+git reset --hard upstream/main
+git push -f origin main
+```
+### Git 命令报错，应该检查什么？
+
+| 报错 | 处理 |
 | :--- | :--- |
-| `git: 'switch' is not a git command` | Git 版本较旧。更新 Git for Windows；临时可把 `git switch -c 名称` 换成 `git checkout -b 名称`。 |
-| `Author identity unknown` | 按“下载自己的 Fork”一节设置 `user.name` 和 `user.email`。 |
-| `remote upstream already exists` | 先用 `git remote -v` 检查；若地址正确，不需要再添加。 |
-| 推送时认证失败 | 浏览器完成 Git Credential Manager 登录；不要把 GitHub 密码当作 Git 密码。 |
-| `git push` 拒绝更新分支 | 运行 `git fetch origin`，再运行 `git merge origin/meme/naiwa-laugh`（分支名换成当前分支）；有冲突时按上节解决，然后 `git push`。不要 force push。 |
-| PR 检查报告 JSON 错误 | 查看报错文件和条目位置，重点检查逗号、引号和方括号。 |
-| PR 检查报告标签无效 | 对照该角色的最新 `tags.json` 修正序号或标签文字。 |
-| 图片 404 | 确认地址属于正确用户名、公开的 Fork、`image` 分支和文件路径，并确认 Fork 未删除或改为私有。 |
-| 本地预览不加载数据 | 在仓库根目录启动 `python -m http.server 8080`，通过 `http://localhost:8080` 访问，不要直接用 `file://` 打开。 |
+| `git: 'switch' is not a git command` | 更新 Git；旧版本可用 `git checkout 分支名` 切换、`git checkout -b 分支名` 创建分支。 |
+| `Author identity unknown` | 设置工作区的 `user.name` 和 `user.email`。 |
+| `upstream already exists` | 运行 `git remote -v`，地址正确就不必再次添加。 |
+| 推送认证失败 | 按 Git Credential Manager 的浏览器提示登录，不要把 GitHub 密码当作 Git 密码。 |
 
-仍无法处理时，把 `git status` 和错误信息贴到投稿 Issue 或新开求助 Issue；发布前移除令牌、邮箱等私人信息。
+### 图片 404 或网站预览不正常怎么办？
+
+图片 404 时，检查 Fork 是否公开、用户名、40 位 SHA 和路径是否正确。可以打开完整地址核对：`https://github.com/你的用户名/NaiLoong/blob/<图片SHA>/assets/memes/meme.gif`。
+
+本地页面无法加载数据时，在仓库根目录运行 `python -m http.server 8080`，浏览器访问 <http://localhost:8080>，不要直接双击 `index.html`。
+
+仍有问题时，在 PR 中贴出错误信息，请维护者协助；发出前遮住私人信息。
