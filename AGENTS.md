@@ -34,10 +34,12 @@
 ## 目录职责
 
 - `index.html`：网站主页面骨架、导航和文案。
+- `docs.html`：站内文档阅读器页面，搭配 `assets/js/docs.js` 与 `assets/css/docs.css`；把 `docs/` 和 `CONTRIBUTING.md` 渲染成网页。
 - `assets/css/`：设计参考 `github-design-system-analysis.md`。
 - `assets/js/app.js`：加载 manifest 和数据，渲染页面、路由和交互。
 - `assets/js/search.js`：标签定义解析、搜索和筛选语义。
 - `assets/js/ghimg.js`：GitHub 图片链接转换、代理探测和失败回退。
+- `assets/js/md.js`：零依赖 Markdown 渲染器，供 `docs.html` 使用；先整体转义 HTML 再解析语法，标题锚点与 GitHub 一致。
 - `assets/placeholders/`：仓库自带的占位和兜底图片。
 - `preview` 分支的 `previews/`：主仓库 Action 生成的轻量 WebP 预览图；不在 `main` 的数据 PR 中提交。
 - `data/manifest.json`：角色和分类目录。
@@ -49,7 +51,7 @@
 - `scripts/validate_data.py`：数据契约、标签语义、图片 URL 格式和重复 URL 校验。
 - `scripts/meme_hash.py`：Issue 评论图片和 PR 图片的哈希缓存、状态联动及每日归档逻辑。
 - `scripts/generate_previews.py`：合并 PR 后下载新增原图并生成预览 WebP。
-- `tests/`：数据校验器、标签解析和图片 URL 转换测试；Python 测试使用标准库，Node 测试使用内置断言，不引入第三方依赖。
+- `tests/`：数据校验器、标签解析、图片 URL 转换和 Markdown 渲染测试；Python 测试使用标准库，Node 测试使用内置断言，不引入第三方依赖。
 - `docs/`：按参与方式区分的贡献指南。
 - `CONTRIBUTING.md`：三类参与者的文档导航。
 
@@ -78,10 +80,11 @@ python scripts/validate_data.py
 python -m unittest discover -s tests -v
 node tests/search.test.js
 node tests/ghimg.test.js
+node tests/md.test.js
 python -m http.server 8080
 ```
 
-前四条是 PR CI 和部署前检查；第五条用于浏览器预览，访问 `http://localhost:8080`。校验器和测试只使用 Python 标准库与 Node 内置断言，不请求网络。
+前五条是 PR CI 和部署前检查；最后一条用于浏览器预览，访问 `http://localhost:8080`。校验器和测试只使用 Python 标准库与 Node 内置断言，不请求网络。
 
 修改校验规则时增加有效和无效输入测试。修改标签解析时，测试本地序号、`null`、对象写法、筛选和展示；修改图片规则时测试 image 分支 commit URL 结构、RAW 错误分支、重复 URL 和 5 MB 限制，且不以真实网络可用性为测试条件。用户可见 UI 改动在本地预览。
 

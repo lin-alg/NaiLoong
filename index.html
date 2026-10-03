@@ -6,6 +6,15 @@
   <title>奶-hub · NaiLoong — 分布式表情包仓库</title>
   <meta name="description" content="奶-hub（NaiLoong）：奶蛙、奶蛋表情合集，顺便带你走完 Fork → PR 的首次 GitHub 贡献流程。">
   <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="奶-hub · NaiLoong">
+  <meta property="og:title" content="奶-hub · NaiLoong — 分布式表情包仓库">
+  <meta property="og:description" content="奶-hub（NaiLoong）：奶蛙、奶蛋表情合集，顺便带你走完 Fork → PR 的首次 GitHub 贡献流程。">
+  <meta property="og:url" content="https://lin-alg.github.io/NaiLoong/">
+  <meta property="og:image" content="https://lin-alg.github.io/NaiLoong/assets/placeholders/naijing.jpg">
+  <meta name="twitter:card" content="summary">
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
@@ -33,7 +42,7 @@
               <path fill="currentColor" d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.499 4.499 0 1 0-8.997 0A4.499 4.499 0 0 0 11.5 7Z"></path>
             </svg>
           </button>
-          <input id="searchInput" type="search" placeholder="搜索标题 / 标签…（回车搜索）" autocomplete="off" spellcheck="false" aria-label="搜索表情，按回车执行">
+          <input id="searchInput" type="search" placeholder="搜索标题 / 标签…" autocomplete="off" spellcheck="false" aria-label="搜索表情">
           <kbd>/</kbd>
         </form>
 
@@ -41,7 +50,10 @@
           <span id="themeIcon" aria-hidden="true">🌗</span>
         </button>
 
-        <a class="btn btn-secondary hide-sm" data-repo-link href="#" rel="noopener">GitHub</a>
+        <a class="btn btn-secondary hide-sm star-btn" data-repo-link data-repo-suffix="/stargazers" href="#" rel="noopener" title="觉得有趣就给项目点个 Star">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.751.751 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z"/></svg>
+          <span id="starCount">Star</span>
+        </a>
       </div>
     </div>
   </header>
@@ -89,17 +101,19 @@
     </aside>
 
     <div class="content" id="gallery">
+      <p class="role-intro" id="roleIntro" hidden></p>
       <div class="toolbar">
         <div class="tabs" id="subTabs" role="tablist" aria-label="表情类型"></div>
         <div class="toolbar-meta">
-          <span class="count" id="resultCount">—</span>
+          <button class="btn btn-ghost btn-sm" id="randomBtn" type="button" title="从当前结果中随机打开一张">🎲 手气不错</button>
+          <span class="count" id="resultCount" role="status" aria-live="polite">—</span>
           <button class="btn btn-ghost btn-sm" id="clearFilters" type="button" hidden>清除筛选</button>
         </div>
       </div>
 
       <div class="tag-panel" id="tagPanel" aria-label="标签筛选"></div>
 
-      <div class="grid" id="grid" aria-live="polite"></div>
+      <div class="grid" id="grid"></div>
 
       <div class="pager pager-bottom" id="pagerBottom" aria-label="分页导航"></div>
 
@@ -133,24 +147,24 @@
           <h3>直接分享表情</h3>
           <p>直接在置顶 Issue 的评论区上传图片即可，不需要其它操作。</p>
           <a class="link" data-repo-link data-repo-suffix="/issues/1" href="#" rel="noopener">打开表情投稿区 →</a>
-          <p><a class="link" data-repo-link data-repo-suffix="/blob/main/docs/meme-submissions.md" href="#" rel="noopener">查看投稿要求</a></p>
+          <p><a class="link" href="docs.html#/meme-submissions">查看投稿要求</a></p>
         </li>
         <li class="quest-card reveal">
           <span class="quest-num">02</span>
           <h3>学习 GitHub 协作流程</h3>
           <p>跟着教程学习Github的使用，顺便将你的表情合并到网站中。</p>
-          <a class="link" data-repo-link data-repo-suffix="/blob/main/docs/github-beginner-guide.md" href="#" rel="noopener">打开新手教程 →</a>
+          <a class="link" href="docs.html#/github-beginner-guide">打开新手教程 →</a>
         </li>
         <li class="quest-card reveal">
           <span class="quest-num">03</span>
           <h3>改进项目本身</h3>
           <p>了解项目结构、数据约定、CI/CD流程。</p>
-          <a class="link" data-repo-link data-repo-suffix="/blob/main/docs/project-maintainers-guide.md" href="#" rel="noopener">打开项目开发指南 →</a>
+          <a class="link" href="docs.html#/project-maintainers-guide">打开项目开发指南 →</a>
         </li>
       </ol>
 
       <p class="quest-help reveal">
-        不确定从哪里开始？查看 <a class="link" data-repo-link data-repo-suffix="/blob/main/CONTRIBUTING.md" href="#" rel="noopener">贡献指南</a>，或开一个新
+        不确定从哪里开始？查看 <a class="link" href="docs.html#/contributing">贡献指南</a>，或开一个新
         <a class="link" data-repo-link data-repo-suffix="/issues" href="#" rel="noopener">Issue 咨询 →</a>
       </p>
     </div>
@@ -161,6 +175,8 @@
       <p>🍼🐲 <strong>奶-hub</strong> —— 理解奶蛙，欣赏奶蛙，成为奶蛙。</p>
       <p class="footer-links">
         <a class="link" data-repo-link href="#" rel="noopener">GitHub</a>
+        <a class="link" data-repo-link data-repo-suffix="/issues/1" href="#" rel="noopener">投稿区</a>
+        <a class="link" href="docs.html#/github-beginner-guide">新手教程</a>
         <a class="link" href="LICENSE">License</a>
         <a class="link" data-repo-link data-repo-suffix="/issues" href="#" rel="noopener">反馈</a>
       </p>

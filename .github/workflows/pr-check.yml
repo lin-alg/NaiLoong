@@ -33,5 +33,8 @@ jobs:
       - name: Test GitHub image URL conversion
         run: node tests/ghimg.test.js
 
+      - name: Test markdown renderer
+        run: node tests/md.test.js
+
       - name: Validate repository data
         run: python scripts/validate_data.py
