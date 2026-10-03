@@ -114,6 +114,18 @@ class ValidateDataTests(unittest.TestCase):
 
         self.assertEqual(validate_data(self.root), [])
 
+    def test_rejects_equivalent_compact_and_full_urls_with_mixed_owner_case(self):
+        entries = json.loads(
+            (self.root / "data/naiwa/animated.json").read_text(encoding="utf-8")
+        )
+        entries[0]["url"] = f"MixedOwner/{IMAGE_COMMIT.upper()}/assets/memes/meme.png"
+        entries.append({
+            "title": "Same image", "tags": [0, None],
+            "url": f"https://github.com/mixedowner/NaiLoong/blob/{IMAGE_COMMIT}/assets/memes/meme.png",
+        })
+        self.write_json("data/naiwa/animated.json", entries)
+        self.assertTrue(any("duplicate image URL" in error for error in validate_data(self.root)))
+
     def test_requires_bilingual_names_for_tag_dimensions(self):
         self.write_json(
             "data/tag-translations.json",

@@ -282,7 +282,7 @@ def _validate_url(value, owner, root, errors):
         ):
             errors.append(f'{owner}: compact image URL has an invalid owner, commit, or path')
             return None
-        return f"https://github.com/{owner_name}/NaiLoong/blob/{commit.lower()}/{PurePosixPath(compact_path).as_posix()}"
+        return f"https://github.com/{owner_name.lower()}/NaiLoong/blob/{commit.lower()}/{PurePosixPath(compact_path).as_posix()}"
 
     if value.startswith("assets/placeholders/"):
         local_path = PurePosixPath(value)

@@ -124,7 +124,7 @@ https://raw.githubusercontent.com/<owner>/NaiLoong/<commit>/assets/memes/laugh.p
 
 不能使用 `blob/image/...` 等分支地址、Issue 附件地址或其他图床。已有的本地 `assets/placeholders/` 文件作为占位资源保留。
 
-同一图片 URL 在数据集中只能出现一次，blob 与 RAW 写法也算重复。单张原图不超过 **5 MB**，建议小于 2 MB；视频仅收录转换为 GIF 的极短片段。
+同一图片 URL 在数据集中只能出现一次；紧凑、blob 与 RAW 写法归一后也算重复，owner 和 commit 大小写不影响归一结果，文件路径保留大小写。单张原图不超过 **5 MB**，建议小于 2 MB；视频仅收录转换为 GIF 的极短片段。
 
 ## 新增角色或分类
 
@@ -147,11 +147,17 @@ https://raw.githubusercontent.com/<owner>/NaiLoong/<commit>/assets/memes/laugh.p
 
 `hash.txt` 每行保存一个已归档的 SHA-256。尚未归档的已入库哈希和待处理图片哈希保存在 Actions Cache；这些状态由工作流维护。
 
+PR 图片检查读取事件中的固定 head commit，文件读取或解析失败会使检查失败。未合并关闭 PR 会解除认领：Issue 原投稿恢复为待处理；纯 PR 图片的占位释放，重新打开后再检查。待处理评论换图或清空图片会回收旧占位，临时下载失败则保留原占位等待重试。
+
+Issue 投稿入库后，机器人将 Markdown 图片改成普通原图链接（HTML 图片也转成链接），然后按“已解决”折叠评论，保留说明和附件地址。归档操作可以通过重新运行对应合并事件重试，不删除评论。
+
 生成的预览图保留透明度，最长边不超过 300 像素，文件严格小于 10 KiB。GIF 使用首帧。路径为：
 
 ```text
 previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp
 ```
+
+owner 与 commit 使用小写，原图路径保留完整文件名和扩展名，例如 `laugh.gif.webp`。前端优先加载此路径，缺失时尝试旧的 `laugh.webp` 路径，以兼容已有预览；列表不会回退下载原图。预览任务使用 `queue: max` 排队。
 
 ## 提交 PR
 

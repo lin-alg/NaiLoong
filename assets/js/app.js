@@ -290,6 +290,9 @@
     const preview = window.GhImg && sub
       ? window.GhImg.preview(item.url, charMeta.id, sub.meta.id)
       : null;
+    const legacyPreview = window.GhImg && sub
+      ? window.GhImg.previewLegacy(item.url, charMeta.id, sub.meta.id)
+      : null;
     const localFallback = typeof item.url === "string" && item.url.indexOf("assets/placeholders/") === 0
       ? item.url
       : CONFIG.fallback;
@@ -317,7 +320,11 @@
       "</button>" +
       '<div class="card-media"><img src="' +
       src +
-      '" alt="' +
+      '"' +
+      (legacyPreview && legacyPreview !== preview
+        ? ' data-preview-legacy="' + esc(legacyPreview) + '"'
+        : "") +
+      ' alt="' +
       esc(alt) +
       '" loading="lazy" decoding="async"></div>' +
       '<div class="card-body"><div class="card-head">' +
