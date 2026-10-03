@@ -481,8 +481,21 @@
     renderPager(total, pageCount, rangeStart, rangeEnd);
   }
 
+  function renderIntro() {
+    const char = currentChar();
+    const desc = char && char.meta && char.meta.desc ? String(char.meta.desc) : "";
+    if (!desc) {
+      el.roleIntro.hidden = true;
+      el.roleIntro.textContent = "";
+      return;
+    }
+    el.roleIntro.hidden = false;
+    el.roleIntro.textContent = (char.meta.icon ? char.meta.icon + " " : "") + desc;
+  }
+
   function render() {
     renderSidebar();
+    renderIntro();
     renderTabs();
     renderTagPanel();
     renderGrid();
@@ -495,12 +508,29 @@
     }
   }
 
-  function applyRoute() {
-    const raw = location.hash.slice(1);
-    const hasRoute = raw.startsWith("/");
-    const parts = hasRoute ? raw.replace(/^\//, "").split("/").filter(Boolean) : [];
+  function ensureSelection() {
+    if (!state.charId || !state.chars.has(state.charId)) {
+      state.charId = state.manifest[0].id;
+      state.subId = null;
+    }
+    const char = currentChar();
+    if (!state.subId || !char.subs.has(state.subId)) {
+      state.subId = char.meta.subcategories[0].id;
+    }
+  }
 
+  function applyRoute() {
     if (!state.manifest.length) return;
+
+    const raw = location.hash.slice(1);
+    // 普通锚点（如 #gallery、#contribute）只负责页面内滚动，不改变当前角色。
+    if (!raw.startsWith("/")) {
+      ensureSelection();
+      render();
+      return;
+    }
+
+    const parts = raw.replace(/^\//, "").split("/").filter(Boolean);
 
     let charId = parts[0];
     if (!charId || !state.chars.has(charId)) charId = state.manifest[0].id;
@@ -517,7 +547,7 @@
     state.charId = charId;
     state.subId = subId;
 
-    if (hasRoute && raw !== "/" + charId + "/" + subId) {
+    if (raw !== "/" + charId + "/" + subId) {
       try {
         history.replaceState(null, "", "#/" + charId + "/" + subId);
       } catch (err) {
@@ -778,20 +808,19 @@
     moveMenuFocus(moves[event.key]);
   }
 
-  function showOriginalImage(card) {
-    const url = card && card.dataset ? card.dataset.originalUrl : "";
+  function openOriginal(url, title) {
     if (!url) return;
     if (typeof el.imageDialog.showModal !== "function") {
-      window.open(url, "_blank", "noopener,noreferrer");
+      window.open(url, "_blank", "noopener noreferrer");
       return;
     }
 
-    const title = card.dataset.imageTitle || "原图";
+    const name = title || "原图";
     const image = el.imageDialogImage;
-    el.imageDialogTitle.textContent = title;
-    image.alt = title;
+    el.imageDialogTitle.textContent = name;
+    image.alt = name;
     image.dataset.originalUrl = url;
-    image.dataset.imageTitle = title;
+    image.dataset.imageTitle = name;
     image.hidden = false;
     el.imageDialogStatus.textContent = "正在加载原图…";
     el.imageDialogStatus.hidden = false;
@@ -799,6 +828,29 @@
     image.src = url;
     if (window.GhImg) window.GhImg.decorate(image);
     el.imageDialog.showModal();
+  }
+
+  function showOriginalImage(card) {
+    if (!card || !card.dataset) return;
+    openOriginal(card.dataset.originalUrl, card.dataset.imageTitle || "原图");
+  }
+
+  // 从当前（可能被搜索/标签筛选过的）结果里随机抽一张打开。
+  function randomMeme() {
+    const char = currentChar();
+    const sub = currentSub();
+    if (!char || !sub) {
+      toast("数据还在加载，稍候再试");
+      return;
+    }
+    const list = filteredRows(char, sub);
+    if (!list.length) {
+      toast("当前筛选下没有表情，先清除筛选试试");
+      return;
+    }
+    const row = list[Math.floor(Math.random() * list.length)];
+    const url = window.GhImg ? window.GhImg.link(row.item.url) : row.item.url;
+    openOriginal(url, row.item.title || "原图");
   }
 
   function storageGet(key) {
@@ -832,6 +884,44 @@
     const next = order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length];
     applyTheme(next);
     toast("已切换主题：" + ({ auto: "跟随系统", dark: "深色", light: "浅色" })[next]);
+  }
+
+  function formatStars(n) {
+    return n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, "") + "k" : String(n);
+  }
+
+  // 从 GitHub API 拉取仓库 Star 数，本地缓存 1 小时；失败时按钮保持显示 "Star"。
+  function loadStars() {
+    const node = $("starCount");
+    if (!node || !/^https?:$/.test(location.protocol)) return;
+    const api = CONFIG.repo.replace("https://github.com/", "https://api.github.com/repos/");
+    if (api === CONFIG.repo) return;
+
+    let cached = null;
+    try {
+      cached = JSON.parse(storageGet("nai-stars") || "null");
+    } catch (err) {
+      cached = null;
+    }
+    if (cached && typeof cached.n === "number" && Date.now() - cached.at < 3600000) {
+      node.textContent = formatStars(cached.n);
+      return;
+    }
+
+    const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), 4000) : 0;
+    fetch(api, ctrl ? { signal: ctrl.signal } : {})
+      .then((res) => {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return res.json();
+      })
+      .then((data) => {
+        if (typeof data.stargazers_count !== "number") return;
+        node.textContent = formatStars(data.stargazers_count);
+        storageSet("nai-stars", JSON.stringify({ n: data.stargazers_count, at: Date.now() }));
+      })
+      .catch(() => {})
+      .then(() => clearTimeout(timer));
   }
 
   function prefersReducedMotion() {
@@ -1062,6 +1152,17 @@
       applySearch();
     });
 
+    // 输入即筛选（轻微防抖），回车仍会滚动到表情库。
+    let searchTimer = 0;
+    el.searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        state.query = el.searchInput.value.trim();
+        state.page = 1;
+        render();
+      }, 140);
+    });
+
     el.searchInput.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         el.searchInput.value = "";
@@ -1076,6 +1177,7 @@
     el.emptyReset.addEventListener("click", resetFilters);
     el.retryBtn.addEventListener("click", () => location.reload());
     el.themeToggle.addEventListener("click", cycleTheme);
+    el.randomBtn.addEventListener("click", randomMeme);
 
     document.addEventListener("keydown", (event) => {
       const tag = document.activeElement && document.activeElement.tagName;
@@ -1090,6 +1192,8 @@
   async function init() {
     el.searchForm = $("searchForm");
     el.searchInput = $("searchInput");
+    el.randomBtn = $("randomBtn");
+    el.roleIntro = $("roleIntro");
     el.sidebarNav = $("sidebarNav");
     el.subTabs = $("subTabs");
     el.tagPanel = $("tagPanel");
@@ -1125,6 +1229,7 @@
     bindEvents();
     primeEasterEgg();
     setupReveal();
+    loadStars();
     el.grid.innerHTML = skeletonMarkup(8);
 
     try {

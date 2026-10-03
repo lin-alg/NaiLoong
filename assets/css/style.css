@@ -138,6 +138,15 @@ h1, h2, h3, p, dl, dd, ol, ul {
   outline-offset: 2px;
 }
 
+::selection {
+  background: rgba(141, 214, 255, 0.3);
+  color: inherit;
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(9, 105, 218, 0.22);
+}
+
 .container {
   max-width: var(--container);
   margin: 0 auto;
@@ -680,6 +689,13 @@ code {
 }
 
 /* ---------- Toolbar & Tabs ---------- */
+.role-intro {
+  margin: 0 0 var(--sp-3);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
 .toolbar {
   display: flex;
   align-items: flex-end;
@@ -1701,6 +1717,10 @@ code {
 
   .hero-title {
     letter-spacing: -1px;
+  }
+
+  .role-intro {
+    font-size: 13px;
   }
 }
 

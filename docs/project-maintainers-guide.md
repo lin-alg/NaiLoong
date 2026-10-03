@@ -8,6 +8,7 @@
 | :--- | :--- |
 | 页面结构和文案 | `index.html` |
 | 布局、主题和样式 | `assets/css/style.css`；参照[前端样式参考](../github-design-system-analysis.md) |
+| 站内文档页和 Markdown 渲染 | `docs.html`、`assets/js/docs.js`、`assets/js/md.js`、`assets/css/docs.css` |
 | 数据加载、路由、分页和页面交互 | `assets/js/app.js` |
 | 标签解析、搜索和筛选 | `assets/js/search.js` |
 | 图片地址转换、代理探测和失败回退 | `assets/js/ghimg.js` |
@@ -37,6 +38,7 @@ python scripts/validate_data.py
 python -m unittest discover -s tests -v
 node tests/search.test.js
 node tests/ghimg.test.js
+node tests/md.test.js
 ```
 
 数据、脚本或页面逻辑改动请运行相关检查；只改文档时，检查链接、示例和操作顺序即可。上述检查使用 Python 标准库和 Node 内置断言，不请求网络。
