@@ -26,15 +26,17 @@
     const clean = url.trim().split(/[?#]/)[0];
     let match = /^([A-Za-z0-9-]+)\/([0-9a-f]{40})\/(.+)$/i.exec(clean);
     if (match) {
-      return "https://raw.githubusercontent.com/" + match[1] + "/NaiLoong/" + match[2] + "/" + match[3];
+      return "https://raw.githubusercontent.com/" + match[1].toLowerCase() + "/NaiLoong/" + match[2].toLowerCase() + "/" + match[3];
     }
     match = /^https?:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\/(?:blob|raw)\/([^/?#]+)\/(.+)$/.exec(clean);
     if (match) {
-      return "https://raw.githubusercontent.com/" + match[1] + "/" + match[2] + "/" + match[3] + "/" + match[4];
+      const ref = /^[0-9a-f]{40}$/i.test(match[3]) ? match[3].toLowerCase() : match[3];
+      return "https://raw.githubusercontent.com/" + match[1].toLowerCase() + "/" + match[2] + "/" + ref + "/" + match[4];
     }
     match = /^https?:\/\/raw\.githubusercontent\.com\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)\/(.+)$/.exec(clean);
     if (match) {
-      return "https://raw.githubusercontent.com/" + match[1] + "/" + match[2] + "/" + match[3] + "/" + match[4];
+      const ref = /^[0-9a-f]{40}$/i.test(match[3]) ? match[3].toLowerCase() : match[3];
+      return "https://raw.githubusercontent.com/" + match[1].toLowerCase() + "/" + match[2] + "/" + ref + "/" + match[4];
     }
     return null;
   }
@@ -63,22 +65,32 @@
     }
   }
 
-  function preview(url, roleId, categoryId) {
+  function previewPath(url, roleId, categoryId, legacy) {
     const source = sourceParts(url);
     if (!source || !roleId || !categoryId) return null;
     const parts = source.path.split("/");
     const filename = parts.pop() || "image";
     const dot = filename.lastIndexOf(".");
     const stem = dot > 0 ? filename.slice(0, dot) : filename;
-    const previewPath = [
+    const compact = /^([A-Za-z0-9-]+)\/([0-9a-f]{40})\//i.test(url.trim());
+    const owner = legacy && compact ? source.owner : source.owner.toLowerCase();
+    const path = [
       config.previewDir,
       roleId,
       categoryId,
-      source.owner,
+      owner,
       source.commit
-    ].concat(parts, (stem || "image") + ".webp");
+    ].concat(parts, (legacy ? (stem || "image") : filename) + ".webp");
     return "https://raw.githubusercontent.com/" + repoPath() + "/" + config.previewRef + "/" +
-      previewPath.map(encodePathPart).join("/");
+      path.map(encodePathPart).join("/");
+  }
+
+  function preview(url, roleId, categoryId) {
+    return previewPath(url, roleId, categoryId, false);
+  }
+
+  function previewLegacy(url, roleId, categoryId) {
+    return previewPath(url, roleId, categoryId, true);
   }
 
   function readRoute() {
@@ -200,6 +212,12 @@
       const orig = img.getAttribute("src");
       if (!orig) return;
       const list = candidates(orig);
+      const legacy = img.getAttribute("data-preview-legacy");
+      if (legacy) {
+        candidates(legacy).forEach((url) => {
+          if (list.indexOf(url) === -1) list.push(url);
+        });
+      }
       img._gh = { list: list, i: 0 };
       if (list[0] !== orig) img.src = list[0];
     });
@@ -219,6 +237,7 @@
     },
     toRaw,
     preview,
+    previewLegacy,
     candidates,
     decorate,
     advance,

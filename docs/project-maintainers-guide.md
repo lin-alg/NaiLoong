@@ -1,80 +1,36 @@
 # 项目结构与开发指南
 
-本文面向希望改进网页、数据结构、CI 或项目文档的贡献者。项目没有前端构建步骤，网站直接由 GitHub Pages 发布。
+本文供修改前端、数据规则、脚本、测试、GitHub Actions 或文档的贡献者使用。网站是零构建的静态站点，直接由 GitHub Pages 发布。
 
-## 项目结构
+## 从哪里改
 
-| 路径 | 职责与修改边界 |
+| 要修改的内容 | 文件 |
 | :--- | :--- |
-| `index.html` | 页面骨架、导航、搜索区、角色/分类容器和页面文案；数据和列表由 JavaScript 渲染。 |
-| `assets/css/style.css` | 全站布局、主题、组件和响应式样式。视觉参考 `github-design-system-analysis.md`。 |
-| `assets/js/app.js` | 读取 manifest 和数据、角色/分类路由、渲染、分页、筛选、主题和交互。 |
-| `assets/js/search.js` | 标签索引构建、标签格式解析、搜索和筛选逻辑。 |
-| `assets/js/ghimg.js` | GitHub 图片 URL 转换、可用图片路由探测和失败回退。 |
-| `assets/icons/` | 网站图标。 |
-| `assets/placeholders/` | 示例、兜底和当前占位图片；不作为社区投稿的图片来源。 |
-| `data/manifest.json` | 角色列表、路由 ID、展示名称、图标和各分类数据文件入口。 |
-| `data/<role>/animated.json` | 该角色的动图分类文件。 |
-| `data/<role>/static.json` | 该角色的静态图分类文件。 |
-| `data/<role>/tags.json` | 该角色的标签维度和维度内标签定义。 |
-| `data/tag-translations.json` | 标签维度的中英文显示名称。 |
-| `.github/ISSUE_TEMPLATE/` | 网站问题与项目建议模板；表情投稿走共享 Issue 评论区。 |
-| `.github/pull_request_template.md` | PR 作者提交前的检查清单。 |
-| `.github/workflows/pr-check.yml` | Pull Request 上执行数据校验器和 Python 单元测试。 |
-| `.github/workflows/deploy.yml` | 检查数据并将仓库根目录发布到 GitHub Pages。 |
-| `.github/workflows/meme-hash.yml` | Issue 图片和 PR 图片的哈希去重、认领状态、合并回收和每日归档。 |
-| `.github/workflows/generate-previews.yml` | 合并到 `main` 的 PR 触发预览图生成，并写入主仓库 `preview` 分支。 |
-| `scripts/generate_previews.py` | 读取合并后的新增图片，生成小于 10 KiB 的 WebP 并上传到预览分支。 |
-| `scripts/validate_data.py` | 数据、manifest、分类引用、标签和图片地址的仓库级校验。 |
-| `tests/` | 数据校验、标签解析、图片 URL 和哈希自动化测试；Python 使用标准库，Node 使用内置断言。 |
-| `docs/` | 面向不同贡献者的投稿、Git 和项目开发说明。 |
-| `CONTRIBUTING.md` | 三类参与者的文档入口索引。 |
-| `AGENTS.md` | 协作者应遵循的实现约定、校验命令和待确认事项。 |
-| `github-design-system-analysis.md` | 现有 UI 设计参考文档。 |
-| `LICENSE` | 当前仓库代码的 MIT 许可证。 |
+| 页面结构和文案 | `index.html` |
+| 布局、主题和样式 | `assets/css/style.css`；参照[前端样式参考](../github-design-system-analysis.md) |
+| 数据加载、路由、分页和页面交互 | `assets/js/app.js` |
+| 标签解析、搜索和筛选 | `assets/js/search.js` |
+| 图片地址转换、代理探测和失败回退 | `assets/js/ghimg.js` |
+| 角色与分类 | `data/manifest.json` |
+| 表情记录与标签定义 | `data/<role-id>/` |
+| 标签维度的中英文显示名 | `data/tag-translations.json` |
+| 数据格式校验 | `scripts/validate_data.py` |
+| 图片去重和投稿状态 | `scripts/meme_hash.py` |
+| 预览图生成 | `scripts/generate_previews.py` |
+| 自动化测试和工作流 | `tests/`、`.github/workflows/` |
+| 贡献文档和提交模板 | `docs/`、`CONTRIBUTING.md`、`.github/ISSUE_TEMPLATE/`、`.github/pull_request_template.md` |
 
-## 数据如何变成页面
+## 本地预览和检查
 
-1. `app.js` 读取 `data/manifest.json`，按 `id` 建立角色路由。
-2. 每个角色的 `subcategories[].file` 指向一个表情 JSON 数组；第一个分类文件所在目录默认提供该角色的 `tags.json`，也可以在 manifest 中显式指定 `tags`。
-3. `search.js` 按 `tags.json` 的维度顺序读取每个维度的本地序号，再建立页面筛选索引；数据数组不存跨维度展平索引。tag panel 的维度显示名从 `data/tag-translations.json` 读取。
-4. 每条数据的 `url` 是原图来源。卡片根据角色、分类和固定 commit URL 推导 `preview` 分支的 WebP 地址；下载按钮才使用 `url`，`ghimg.js` 对预览和下载用的 GitHub `blob` / `raw` 地址尝试转换和代理回退。
-
-表情条目至少包含非空 `title`、`url` 和 `tags`。`tags` 数组长度与维度数相同，按维度顺序存本地整数序号或 `null`；对象写法使用“维度名 → 本地序号、标签文字或 `null`”。详情见 [README 数据规范](../README.md#数据规范)。
-
-标签维度键新增或改名时，在 `data/tag-translations.json` 同步提供非空的 `en` 和 `zh` 显示名；分类文件中使用的每个维度都必须有对应翻译。
-
-## 新增角色
-
-1. 新建 `data/<role-id>/animated.json`、`static.json`、`tags.json`。空数据文件使用 `[]`。
-2. 在 `manifest.json` 追加唯一角色 ID、展示名、图标和分类列表。角色与分类 ID 使用小写英文、数字和连字符；分类文件路径相对 `data/`，例如 `naidan/animated.json`。
-3. 角色 ID 与数据目录名保持一致；分类文件使用安全的仓库相对路径，不引用目录外文件。
-4. 标签定义应有稳定含义。添加、删除或重新排序维度会改变标签数组位置，必须同步检查该角色全部表情的标签。
-5. 本地运行站点，检查新角色路由、分类、图片和筛选器。
-
-## 修改现有数据或标签
-
-- 修复标题、标签或图片时，修改原有条目而不是重复追加；PR 说明旧条目如何定位。
-- 同一角色 `tags.json` 的维度顺序对应标签数组位置，维度内部的数字键是本地序号。调整维度顺序会改变数组位置；修改本地序号时也要同步检查该维度的记录。
-- 维度名称的中英文显示文本统一维护在 `data/tag-translations.json`，前端按维度键查找中文名称；不要在渲染代码中写死译名。
-- 当前页面兼容数字数组和 `{ "维度": 本地序号或标签文字 }` 对象。校验器以这两种格式为正式投稿格式；不要依赖运行时虽然能读取但文档未支持的隐式类型。
-- 新投稿的 `url` 必须固定到贡献者公开 Fork 中上传图片的 commit：推荐 `fork-owner/<40位commit SHA>/<path>` 紧凑格式，也接受完整 blob/RAW 格式。校验器检查 URL 结构但不联网确认文件是否存在；不能使用会随 `image` 分支后续提交变化的 URL。
-
-## 从投稿 Issue 收录图片
-
-投稿人直接将图片上传到[共享投稿 Issue](https://github.com/lin-alg/NaiLoong/issues/1)评论区，不需要 Fork。整理投稿时，从评论下载图片，上传到处理者自己的公开 Fork 的 `image` 分支，再在 PR 数据记录中引用该分支的图片地址。投稿评论中的附件地址不写入分类文件。
-
-## 本地运行与检查
-
-在仓库根目录执行：
+数据校验需要 Python 3.9 或更新版本，JavaScript 测试使用 Node.js（CI 使用 Node 20）。本地预览无需安装前端依赖。在仓库根目录运行：
 
 ```bash
 python -m http.server 8080
 ```
 
-浏览器打开 `http://localhost:8080`。静态页面通过 HTTP 读取 JSON；直接用 `file://` 打开会遇到浏览器的跨域限制。停止本地服务器按 `Ctrl+C`。
+打开 <http://localhost:8080>，按 `Ctrl+C` 停止服务器。修改页面后检查桌面和窄屏布局、键盘操作，以及加载失败、无结果等状态。
 
-运行与 CI 相同的检查：
+PR 和部署工作流会运行以下检查：
 
 ```bash
 python scripts/validate_data.py
@@ -83,44 +39,152 @@ node tests/search.test.js
 node tests/ghimg.test.js
 ```
 
-校验器仅使用 Python 标准库。CI 运行在 Ubuntu；建议本地使用 Python 3.9 或更新版本。
+数据、脚本或页面逻辑改动请运行相关检查；只改文档时，检查链接、示例和操作顺序即可。上述检查使用 Python 标准库和 Node 内置断言，不请求网络。
 
-## 自动检查
+## 数据如何变成页面
 
-`.github/workflows/pr-check.yml` 在 Pull Request 上运行四步：
+`app.js` 从 `data/manifest.json` 读取角色和分类，再加载各分类文件及该角色的 `tags.json`。`search.js` 解析标签，建立搜索和筛选索引；维度显示名来自 `data/tag-translations.json`。
 
-1. `python -m unittest discover -s tests -v`，验证校验器能接受有效数据并拒绝已知错误。
-2. `node tests/search.test.js`，验证本地序号、`null`、对象写法、搜索和双语标签展示。
-3. `node tests/ghimg.test.js`，验证 blob / RAW 图片地址转换。
-4. `python scripts/validate_data.py`，检查仓库当前全部数据、manifest 引用、Fork 图片 URL 和重复 URL。
+列表根据条目的 `url` 推导主仓库 `preview` 分支中的 WebP 地址。点击卡片、按下载按钮或在卡片和原图上右键时才使用原图；右键菜单提供下载原图、复制图片 URL 和复制为 Markdown。`ghimg.js` 负责 GitHub 图片地址转换和请求失败后的回退。
 
-数据校验器对图片 URL 只进行结构检查，不向网络请求 Fork 文件；`assets/placeholders/` 是现有演示数据的例外。独立的 `meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件，执行哈希去重与 5 MB 检查。合并后的 `generate-previews.yml` 只处理新增或替换的图片记录，把 GIF 首帧和静态图转成长宽不超过 300 像素、严格小于 10 KiB 的 WebP，并保留透明度，写入 `preview` 分支的 `previews/<role>/<category>/<owner>/<commit>/...webp`。部署工作流也会先执行数据校验，校验成功后才上传 Pages artifact。检查失败时从 Actions 的报错文件和条目序号定位；如果校验器规则与本指南不一致，应一起修改实现、测试和文档。
+## 数据规范
 
-## 图片哈希与投稿状态
+### 角色和分类：`data/manifest.json`
 
-第一类投稿者直接在[共享投稿 Issue](https://github.com/lin-alg/NaiLoong/issues/1)评论中上传图片。`meme-hash.yml` 会计算评论附件的 SHA-256，并在 GitHub Actions Cache 维护已入库和预占位缓存。机器人会在原评论顶部维护「⚪ 未处理」「🟡 处理中」或「🟢 已入库」状态栏，并保留评论者自己的正文。
+```json
+[
+  {
+    "id": "naiwa",
+    "name": "奶蛙",
+    "icon": "🍼🐸",
+    "subcategories": [
+      { "id": "animated", "name": "动图", "file": "naiwa/animated.json" },
+      { "id": "static", "name": "静态图", "file": "naiwa/static.json" }
+    ]
+  }
+]
+```
 
-第二、三类贡献者的 PR 描述应包含状态评论提供的 `MEME-CLAIM-...` 认领口令。PR 图片哈希必须与该评论全部图片一致；没有口令的普通数据 PR 也会检查其 Fork `image` 分支图片是否与三层缓存重复。重复时 PR 检查失败，不新增预占位哈希。
+- manifest 是非空数组，每个角色至少有一个分类。角色和分类的 `name` 均不能为空。
+- 角色 ID 在整个 manifest 中唯一；分类 ID 在同一角色内唯一。ID 使用小写英文、数字和单个连字符分隔，例如 `naiwa`、`new-role`。
+- 角色目录为 `data/<role-id>/`。`file` 是相对 `data/` 的 `.json` 路径，必须在该角色目录内；分类文件都要在 manifest 中登记。
+- 默认从第一个分类文件所在目录读取 `tags.json`。也可以在角色对象的 `tags` 字段中指定相对 `data/` 的标签文件路径。
 
-图片成功认领后先写入 GitHub Actions Cache。Cache key 使用共同前缀和 UTC 时间戳后缀，workflow concurrency 保证任何读写都等待前一个任务完成；任务结束保存新 cache 并删除旧 cache。PR 合并时移入已入库缓存；每日北京时间 00:00 的定时任务在 concurrency 锁下把当天缓存一次性追加到主分支 `hash.txt`。Fork 图片仍由贡献者公开 Fork 的 `image` 分支承载，主仓库不合并该图片分支。
+### 表情记录：分类文件
 
-如果日志出现 `cache write denied` 或 `token has no writable scopes`，确认 `meme-hash.yml` 的 `jobs.process` 使用 `cache-mode: write`，然后重新运行失败的 workflow。处理 Issue 评论时，机器人通过 `Accept: application/vnd.github.full+json` 获取评论的 `body_html`，从中读取带 `?jwt=...` 签名的 `private-user-images.githubusercontent.com` 链接；不要给这个图片请求附加 Bearer Token。若日志仍显示 HTTP 404，重新编辑评论并上传图片以生成新的签名附件链接。
+分类文件是 JSON 数组，没有表情时填写 `[]`。每条记录包含：
 
-## 修改前端
+```json
+{
+  "title": "奶蛙狂笑",
+  "url": "你的用户名/<40位图片commit SHA>/assets/memes/laugh.png",
+  "tags": [2, 0, 1]
+}
+```
 
-- 保持单页、零构建依赖的加载方式；新增 JS/CSS 文件后在 `index.html` 中正确引用。
-- 修改页面渲染时使用 `app.js` 既有数据流和 `search.js` 公共接口，不要在卡片渲染中重复实现标签语义。
-- 卡片展示必须使用 `preview` 分支中的 WebP；原始 `url` 只用于下载，不要让原图参与列表展示。
-- 核对桌面与窄屏布局、无结果状态、加载/失败状态和键盘操作。
-- 改动视觉样式时参照 `github-design-system-analysis.md`，本地预览真实数据。
-- PR 描述用户可见变化；UI 行为变化尽量附截图。
+`title` 和 `url` 是非空字符串；`tags` 按下面的标签规则填写。修订已有表情时修改原条目，并保留已有来源信息。
 
-## 预览图分支
+### 标签：`tags.json`
 
-`preview` 是主仓库专用的生成分支，不用于接收贡献者 PR。首次有合并 PR 需要写入预览时，workflow 会从 `main` 创建该分支；预览文件的路径与数据角色、分类和原图来源层级对应，不把不同来源的同名文件压成一个平面目录。
+```json
+{
+  "smile": { "0": "轻松绷住", "1": "憋笑", "2": "大笑" },
+  "age limit": { "0": "老少咸宜", "1": "朋友整活", "2": "重口" },
+  "artistic merit": { "0": "下里巴人", "1": "日常", "2": "阳春白雪" }
+}
+```
 
-当前已有条目若需要补图，由维护者把原图转换为保留透明度的 WebP 后手动提交到同一分支和路径。自动化不扫描历史条目，只处理 `pull_request_target` 的合并事件；重新运行同一个 workflow 时会复用相同路径并跳过内容未变化的预览。
+每个顶层键是一个标签维度，维度内的数字键是本地序号。维度名和标签文字不能为空；序号是非负整数，同一维度内的标签文字不能重复。
+
+`tags` 支持两种写法：
+
+- 数组：按 `tags.json` 的维度书写顺序填写，每个维度恰有一个值，值为该维度已定义的整数序号或 `null`。例如 `[2, null, 1]` 表示“大笑、年龄限制未知、日常”。
+- 对象：使用维度名作为键，值可为已定义的整数序号、标签文字或 `null`。允许省略未知维度，例如 `{ "smile": "大笑", "artistic merit": 1 }`。
+
+新增或重命名维度时，在 `data/tag-translations.json` 中补齐该维度非空的 `en`、`zh` 显示名。例如：
+
+```json
+{
+  "smile": { "en": "Smile strength", "zh": "笑容强度" }
+}
+```
+
+调整维度顺序会改变数组标签的位置；修改已有序号会改变它的含义。两种改动都要同步迁移受影响的条目。
+
+### 图片 URL
+
+社区原图保存在贡献者公开 Fork 的 `image` 分支，数据记录固定到上传图片的 40 位 commit SHA。支持以下等价格式（替换所有尖括号内容）：
+
+```text
+<owner>/<commit>/assets/memes/laugh.png
+https://github.com/<owner>/NaiLoong/blob/<commit>/assets/memes/laugh.png
+https://github.com/<owner>/NaiLoong/raw/<commit>/assets/memes/laugh.png
+https://raw.githubusercontent.com/<owner>/NaiLoong/<commit>/assets/memes/laugh.png
+```
+
+不能使用 `blob/image/...` 等分支地址、Issue 附件地址或其他图床。已有的本地 `assets/placeholders/` 文件作为占位资源保留。
+
+同一图片 URL 在数据集中只能出现一次；紧凑、blob 与 RAW 写法归一后也算重复，owner 和 commit 大小写不影响归一结果，文件路径保留大小写。单张原图不超过 **5 MB**，建议小于 2 MB；视频仅收录转换为 GIF 的极短片段。
+
+## 新增角色或分类
+
+1. 为角色建立 `data/<role-id>/`，添加分类数组文件和 `tags.json`；空分类写 `[]`。
+2. 在 manifest 登记角色及分类，新维度同时补齐中英文显示名。
+3. 运行数据校验，在本地检查角色切换、分类、搜索和筛选。
+
+给已有角色加分类，只需新增分类文件并更新该角色的 `subcategories`。角色和分类都由数据生成，不需要在前端写死。
+
+## 自动化
+
+| 工作流 | 触发条件 | 作用 |
+| :--- | :--- | :--- |
+| `pr-check.yml`（Data Linter） | PR 或手动运行 | 运行本地检查中的四条命令。 |
+| `meme-hash.yml`（Meme Image Hash Check） | 投稿评论、PR、定时或手动运行 | 下载图片，检查 5 MB 上限和 SHA-256 重复，更新投稿状态；每天北京时间 02:00 归档已入库哈希。 |
+| `generate-previews.yml`（Generate Meme Previews） | 合并到 `main` 的 PR | 为新增或替换的图片生成 WebP，写入主仓库 `preview` 分支。 |
+| `deploy.yml` | `main` 更新或手动运行 | 四条检查全部通过后发布 GitHub Pages。 |
+
+`validate_data.py` 只检查 URL 结构和数据中的重复 URL，不下载图片。图片下载、体积检查和内容去重由独立的哈希工作流执行。哈希工作流和预览图工作流使用主仓库脚本，不执行 PR 分支代码。
+
+`hash.txt` 每行保存一个已归档的 SHA-256。尚未归档的已入库哈希和待处理图片哈希保存在 Actions Cache；这些状态由工作流维护。
+
+PR 图片检查读取事件中的固定 head commit，文件读取或解析失败会使检查失败。未合并关闭 PR 会解除认领：Issue 原投稿恢复为待处理；纯 PR 图片的占位释放，重新打开后再检查。待处理评论换图或清空图片会回收旧占位，临时下载失败则保留原占位等待重试。
+
+Issue 投稿入库后，机器人将 Markdown 图片改成普通原图链接（HTML 图片也转成链接），然后按“已解决”折叠评论，保留说明和附件地址。归档操作可以通过重新运行对应合并事件重试，不删除评论。
+
+生成的预览图保留透明度，最长边不超过 300 像素，文件严格小于 10 KiB。GIF 使用首帧。路径为：
+
+```text
+previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp
+```
+
+owner 与 commit 使用小写，原图路径保留完整文件名和扩展名，例如 `laugh.gif.webp`。前端优先加载此路径，缺失时尝试旧的 `laugh.webp` 路径，以兼容已有预览；列表不会回退下载原图。预览任务使用 `queue: max` 排队。
 
 ## 提交 PR
 
-保持改动聚焦，说明行为变化和数据迁移方式。新增或修改数据时列出角色、分类、图片来源；修改标签定义时说明旧条目的迁移范围。运行上述两条本地检查，并填写 `.github/pull_request_template.md`。
+从最新 `main` 建立工作分支，说明改了什么以及如何验证。数据迁移请说明受影响的角色和条目；页面改动请附截图。修改规则时同步更新实现、测试和相关指南。
+
+## 常见问题
+
+### 为什么检查通过了，图片却打不开？
+
+数据校验不联网检查文件。确认 Fork 公开、固定 commit 和路径正确；如果是新投稿，再查看哈希检查的下载结果。
+
+### 新记录合并后，列表仍显示占位图怎么办？
+
+查看 **Generate Meme Previews** 是否成功，再检查 `preview` 分支中的文件路径是否与角色、分类、图片来源一致。原图可用时，可重新运行失败的预览图任务。
+
+### 预览图会自动补齐历史条目吗？
+
+不会。自动化只处理合并 PR 中新增或替换的图片。历史条目需要按上述尺寸、格式和路径规则生成预览图，再提交到主仓库 `preview` 分支。
+
+### 可以直接修改 `hash.txt` 或清空缓存解决重复报错吗？
+
+先确认图片是否已入库或被其他投稿认领，再修正 PR 或投稿。`hash.txt` 保存已归档结果，缓存还保存待处理状态；删除它们会丢失去重记录。
+
+### 哈希任务提示 `cache write denied` 或 `token has no writable scopes` 怎么办？
+
+检查对应 job 的 `cache-mode: write` 和 `actions: write` 权限配置，修复后重新运行任务。
+
+### Issue 附件下载返回 404，应该改数据 URL 吗？
+
+先通过 GitHub API 重新读取评论的 `body_html`，获取有效的签名附件链接；对该图片链接的请求不附加 Bearer Token。仍失败时，请投稿者重新上传附件。分类文件始终使用 Fork 中的固定 commit 图片 URL。

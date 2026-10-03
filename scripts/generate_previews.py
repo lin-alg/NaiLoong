@@ -117,7 +117,9 @@ def new_preview_entries(github: GitHub, pull_request):
             continue
 
         previous_filename = PurePosixPath(item.get("previous_filename") or filename).as_posix()
-        base_entries = github.pr_file_json(REPOSITORY, previous_filename, base_sha)
+        base_entries = github.pr_file_json(
+            REPOSITORY, previous_filename, base_sha, allow_missing=item.get("status") == "added"
+        )
         merged_entries = github.pr_file_json(REPOSITORY, filename, merged_sha)
         for entry in added_preview_entries(base_entries, merged_entries):
             result.append({"role": category[0], "category": category[1], "entry": entry})
@@ -134,7 +136,7 @@ def _source_parts(url: str):
     if not parts[0] or not parts[1] or not parts[3:]:
         raise BotError(f"Image URL has no usable source path: {url}")
     return {
-        "owner": parts[0],
+        "owner": parts[0].lower(),
         "commit": parts[2].lower(),
         "path": [unquote(part) for part in parts[3:]],
     }
@@ -146,9 +148,7 @@ def preview_relative_path(role_id: str, category_id: str, url: str) -> str:
         raise BotError(f"Cannot create a preview path for {url}")
     source_path = list(source["path"])
     filename = source_path.pop()
-    dot = filename.rfind(".")
-    stem = filename[:dot] if dot > 0 else filename
-    preview_name = (stem or "image") + ".webp"
+    preview_name = (filename or "image") + ".webp"
     return PurePosixPath(
         PREVIEW_ROOT,
         role_id,
