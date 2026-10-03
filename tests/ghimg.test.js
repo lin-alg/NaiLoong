@@ -37,7 +37,7 @@ assert.strictEqual(
     "naiwa",
     "animated"
   ),
-  `https://raw.githubusercontent.com/lin-alg/NaiLoong/preview/previews/naiwa/animated/contributor/${commit}/assets/memes/meme.webp`
+  `https://raw.githubusercontent.com/lin-alg/NaiLoong/preview/previews/naiwa/animated/contributor/${commit}/assets/memes/meme.gif.webp`
 );
 assert.strictEqual(
   context.window.GhImg.preview(
@@ -47,5 +47,45 @@ assert.strictEqual(
   ),
   null
 );
+
+const ghimg = context.window.GhImg;
+const mixed = `MixedOwner/${commit.toUpperCase()}/assets/memes/Laugh.png`;
+assert.strictEqual(
+  ghimg.preview(mixed, "naiwa", "static"),
+  ghimg.preview(`https://github.com/MixedOwner/NaiLoong/blob/${commit}/assets/memes/Laugh.png`, "naiwa", "static")
+);
+assert.strictEqual(
+  ghimg.preview(mixed, "naiwa", "static"),
+  `https://raw.githubusercontent.com/lin-alg/NaiLoong/preview/previews/naiwa/static/mixedowner/${commit}/assets/memes/Laugh.png.webp`
+);
+assert.notStrictEqual(
+  ghimg.preview(mixed, "naiwa", "static"),
+  ghimg.preview(mixed.replace(".png", ".gif"), "naiwa", "static")
+);
+assert.strictEqual(
+  ghimg.preview(`contributor/${commit}/meme%20one%2Epng`, "naiwa", "static"),
+  `https://raw.githubusercontent.com/lin-alg/NaiLoong/preview/previews/naiwa/static/contributor/${commit}/meme%20one.png.webp`
+);
+assert.strictEqual(
+  toRaw(`https://github.com/MixedOwner/NaiLoong/blob/FeatureBranch/Laugh.png`),
+  "https://raw.githubusercontent.com/mixedowner/NaiLoong/FeatureBranch/Laugh.png"
+);
+
+ghimg.configure({ proxies: [] });
+const originalPreview = ghimg.preview(mixed, "naiwa", "static");
+const legacyPreview = ghimg.previewLegacy(mixed, "naiwa", "static");
+assert(legacyPreview.includes(`/MixedOwner/${commit}/assets/memes/Laugh.webp`));
+assert(
+  ghimg.previewLegacy(`https://github.com/MixedOwner/NaiLoong/blob/${commit}/assets/memes/Laugh.png`, "naiwa", "static")
+    .includes(`/mixedowner/${commit}/assets/memes/Laugh.webp`)
+);
+const image = {
+  tagName: "IMG",
+  getAttribute: (name) => ({ src: originalPreview, "data-preview-legacy": legacyPreview })[name] || null
+};
+ghimg.decorate(image);
+assert.strictEqual(image._gh.list[0], originalPreview);
+assert.strictEqual(ghimg.advance(image), legacyPreview);
+assert.strictEqual(ghimg.advance(image), null);
 
 console.log("GitHub image URL conversion passed");

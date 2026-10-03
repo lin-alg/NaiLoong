@@ -49,4 +49,14 @@ const smileTag = tags.cats[0].items.find((item) => item.local === 2);
 const smileFilter = new Map([["smile", new Set([smileTag.flat])]]);
 assert.strictEqual(search.search(rows, "", smileFilter).length, 1);
 
+const numericLabels = search.buildTagIndex({ dimension: { "0": "2", "2": "other" } });
+assertLabels(
+  search.labelsOf(search.resolveRawTags({ dimension: "2" }, numericLabels), numericLabels),
+  ["2"]
+);
+assertLabels(
+  search.labelsOf(search.resolveRawTags({ dimension: 2 }, numericLabels), numericLabels),
+  ["other"]
+);
+
 console.log("search semantics passed");

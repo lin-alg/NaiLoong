@@ -12,19 +12,19 @@ import json
 import os
 import re
 import secrets
-import subprocess
 import sys
 import time
 from collections import Counter
+from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 try:
-    from .validate_data import _validate_url
+    from .validate_data import _pairs_without_duplicates, _validate_url
 except ImportError:
-    from validate_data import _validate_url
+    from validate_data import _pairs_without_duplicates, _validate_url
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,6 +33,7 @@ API_ROOT = "https://api.github.com"
 STATE_PATH = ".cache/meme-hash/state.json"
 ISSUE_NUMBER = 1
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_COMMENT_IMAGES = 5
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CLAIM_PATTERN = re.compile(r"\bMEME-CLAIM-[0-9a-f]{24}\b")
 MARKDOWN_IMAGE_PATTERN = re.compile(
@@ -40,6 +41,9 @@ MARKDOWN_IMAGE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 HTML_IMAGE_PATTERN = re.compile(r"<img\b[^>]*\bsrc=[\"']([^\"']+)[\"']", re.IGNORECASE)
+HTML_IMAGE_TAG_PATTERN = re.compile(
+    r"<img\b(?:[^>\"']|\"[^\"]*\"|'[^']*')*>", re.IGNORECASE
+)
 STATUS_START = "<!-- nai-meme-hash-status:start -->"
 STATUS_END = "<!-- nai-meme-hash-status:end -->"
 STATUS_BLOCK_PATTERN = re.compile(
@@ -139,6 +143,31 @@ def parse_issue_image_urls(body: str) -> list[str]:
         re.IGNORECASE,
     )
     return [next(group for group in match.groups() if group) for match in matches.finditer(body)]
+
+
+class _ArchivedImageParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.url = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() == "img":
+            self.url = dict(attrs).get("src")
+
+
+def archive_comment_images(body: str) -> str:
+    body = MARKDOWN_IMAGE_PATTERN.sub(lambda match: match.group(0)[1:], body)
+    body = re.sub(r"(?<!\\)!\[((?:\\.|[^\]\\])*)\]", r"[\1]", body)
+
+    def html_link(match):
+        parser = _ArchivedImageParser()
+        parser.feed(match.group(0))
+        if not parser.url:
+            return html.escape(match.group(0))
+        url = parser.url.replace("<", "%3C").replace(">", "%3E")
+        return f"[原图](<{url}>)"
+
+    return HTML_IMAGE_TAG_PATTERN.sub(html_link, body)
 
 
 def is_supported_image(data: bytes, content_type: str) -> bool:
@@ -360,8 +389,19 @@ class GitHub:
     def get_issue_comments(self, issue_number):
         return self.paginated(f"/repos/{self.repository}/issues/{issue_number}/comments")
 
-    def get_pr_files(self, number):
-        return self.paginated(f"/repos/{self.repository}/pulls/{number}/files")
+    def get_pr_files(self, number, expected_head_sha=None):
+        endpoint = f"/repos/{self.repository}/pulls/{number}"
+
+        def check_head():
+            if expected_head_sha:
+                current = self.request("GET", endpoint)
+                if (current.get("head") or {}).get("sha") != expected_head_sha:
+                    raise BotError(f"PR #{number} changed while checking; retry the latest PR event")
+
+        check_head()
+        files = self.paginated(endpoint + "/files")
+        check_head()
+        return files
 
     def paginated(self, path):
         records = []
@@ -376,25 +416,28 @@ class GitHub:
                 return records
             page += 1
 
-    def pr_file_json(self, repository, path, ref):
+    def pr_file_json(self, repository, path, ref, allow_missing=False):
         encoded_path = quote(path, safe="/")
         query = urlencode({"ref": ref})
         endpoint = f"/repos/{repository}/contents/{encoded_path}?{query}"
         try:
             item = self.request("GET", endpoint)
         except GitHubAPIError as exc:
-            if exc.status == 404:
+            if exc.status == 404 and allow_missing:
                 return []
             raise
         if item.get("encoding") != "base64":
             raise BotError(f"Could not read PR file as base64: {path}")
         try:
-            parsed = json.loads(base64.b64decode(item.get("content", "")))
+            parsed = json.loads(
+                base64.b64decode(item.get("content", "")),
+                object_pairs_hook=_pairs_without_duplicates,
+            )
         except (ValueError, json.JSONDecodeError) as exc:
             raise BotError(f"PR file is invalid JSON: {path}") from exc
-        if not isinstance(parsed, list):
-            return []
-        return [entry for entry in parsed if isinstance(entry, dict)]
+        if not isinstance(parsed, list) or any(not isinstance(entry, dict) for entry in parsed):
+            raise BotError(f"PR file must contain an array of meme objects: {path}")
+        return parsed
 
     def read_blob_json(self, blob_sha):
         if not blob_sha:
@@ -450,17 +493,17 @@ class GitHub:
             return self.edit_issue_comment(existing["id"], full_body)
         return self.issue_comment(issue_number, full_body)
 
-    def minimize_comment(self, node_id):
+    def minimize_comment(self, node_id, classifier="SPAM"):
         query = (
             "mutation($id: ID!) { minimizeComment(input: {subjectId: $id, "
-            "classifier: SPAM}) { minimizedComment { isMinimized } } }"
+            f"classifier: {classifier}" + "}) { minimizedComment { isMinimized } } }"
         )
         try:
             response = self.request("POST", "/graphql", {"query": query, "variables": {"id": node_id}})
             if response.get("errors"):
-                print(f"::warning::Could not minimize duplicate issue comment: {response['errors']}")
+                print(f"::warning::Could not minimize issue comment: {response['errors']}")
         except GitHubAPIError as exc:
-            print(f"::warning::Could not minimize duplicate issue comment: {exc}")
+            print(f"::warning::Could not minimize issue comment: {exc}")
 
     def pr_status_comment(self, number, body, comment_id=None):
         marker = f"<!-- nai-meme-hash-pr:{number} -->"
@@ -479,11 +522,6 @@ def fetch_image_bytes(url: str, attachment=False) -> bytes:
         raise BotError("Fork images must be fetched from raw.githubusercontent.com")
 
     headers = {"User-Agent": "NaiLoong-meme-hash-bot", "Accept": "image/*"}
-    if not attachment:
-        token = os.environ.get("GITHUB_TOKEN")
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-            
     request = Request(url, headers=headers)
     try:
         with urlopen(request, timeout=25) as response:
@@ -526,8 +564,6 @@ def canonical_urls_from_entries(entries):
     urls = []
     for entry in entries:
         value = entry.get("url")
-        if not isinstance(value, str):
-            continue
         errors = []
         canonical = _validate_url(value, "PR image URL", ROOT, errors)
         if errors:
@@ -545,7 +581,10 @@ def new_data_urls(github: GitHub, pull_request):
     head_repo = (head.get("repo") or {}).get("full_name")
     if not head_repo:
         raise BotError("The PR head repository is unavailable")
-    files = github.get_pr_files(number)
+    head_sha = head.get("sha")
+    if not head_sha:
+        raise BotError("The PR head commit SHA is unavailable")
+    files = github.get_pr_files(number, expected_head_sha=head_sha)
     additions = []
     for item in files:
         filename = item.get("filename", "")
@@ -554,16 +593,13 @@ def new_data_urls(github: GitHub, pull_request):
         if PurePosixPath(filename).name in {"manifest.json", "tags.json", "tag-translations.json"}:
             continue
         base_filename = item.get("previous_filename", filename)
-        base_entries = github.pr_file_json(REPOSITORY, base_filename, base["sha"])
+        base_entries = github.pr_file_json(
+            REPOSITORY, base_filename, base["sha"], allow_missing=item.get("status") == "added"
+        )
         if item.get("status") == "removed":
             head_entries = []
         else:
-            try:
-                head_raw = subprocess.check_output(["git", "show", f"FETCH_HEAD:{filename}"]).decode("utf-8")
-                head_entries = [e for e in json.loads(head_raw) if isinstance(e, dict)]
-            except Exception as exc:
-                print(f"::warning::读取 PR JSON 文件失败: {exc}")
-                head_entries = []
+            head_entries = github.pr_file_json(head_repo, filename, head_sha)
         old_urls = canonical_urls_from_entries(base_entries)
         new_urls_in_head = canonical_urls_from_entries(head_entries)
         additions.extend(added_canonical_urls(old_urls, new_urls_in_head))
@@ -618,18 +654,49 @@ def comment_status(body: str) -> str | None:
 
 def issue_comment_reply(github: GitHub, comment_id, state, status, hashes=None):
     record = state.get("comments", {}).get(str(comment_id), {})
-    current = github.get_issue_comment(comment_id)
+    try:
+        current = github.get_issue_comment(comment_id)
+    except GitHubAPIError as exc:
+        if exc.status == 404:
+            return None
+        raise
     original_body = strip_status_block(current.get("body", ""))
+    if status == "ingested":
+        original_body = archive_comment_images(original_body)
     status_text = issue_status_body(
         status,
         hashes,
         record.get("claim_code"),
         record.get("pr_number"),
     )
-    return github.edit_issue_comment(
-        comment_id,
-        f"{STATUS_START}\n{status_text}\n{STATUS_END}\n\n{original_body}",
-    )
+    body = f"{STATUS_START}\n{status_text}\n{STATUS_END}\n\n{original_body}"
+    try:
+        updated = github.edit_issue_comment(comment_id, body) if body != current.get("body") else current
+    except GitHubAPIError as exc:
+        if exc.status == 404:
+            return None
+        raise
+    if status == "ingested" and current.get("node_id"):
+        github.minimize_comment(current["node_id"], classifier="RESOLVED")
+    return updated
+
+
+def release_comment_reservations(state, comment_id):
+    for digest, reservation in list(state["reserved"].items()):
+        if reservation.get("comment_id") == str(comment_id):
+            state["reserved"].pop(digest)
+
+
+def release_pr_reservations(state, number, hashes=None):
+    for digest, reservation in list(state["reserved"].items()):
+        if str(reservation.get("pr_number")) != str(number):
+            continue
+        if hashes is not None and digest not in hashes:
+            continue
+        if reservation.get("comment_id"):
+            reservation["pr_number"] = None
+        else:
+            state["reserved"].pop(digest)
 
 
 def handle_issue_comment(github: GitHub, event):
@@ -646,12 +713,12 @@ def handle_issue_comment(github: GitHub, event):
     comment_body = full_comment.get("body", comment.get("body", ""))
     html_body = full_comment.get("body_html") or ""
     urls = parse_issue_image_urls(html_body or comment_body)
-    current_status = comment_status(comment_body)
-    if not urls and current_status is None:
-        return
     initial_state, _ = github.load_state()
     previous = initial_state["comments"].get(str(comment["id"]), {})
-    if previous.get("status") == "processing" or current_status in {"processing", "ingested"}:
+    if previous.get("status") == "ingested":
+        issue_comment_reply(github, comment["id"], initial_state, "ingested")
+        return
+    if previous.get("status") == "processing":
         print(f"Issue comment {comment['id']} is already claimed or ingested; leaving its status unchanged.")
         return
     if not urls:
@@ -662,16 +729,15 @@ def handle_issue_comment(github: GitHub, event):
                 old = state["comments"].get(comment_id)
                 if not old or old.get("status") == "processing":
                     return
-                for digest, reservation in list(state["reserved"].items()):
-                    if reservation.get("comment_id") == comment_id:
-                        reservation["pr_number"] = None
-                old["status"] = "unprocessed"
-                old["pr_number"] = None
+                release_comment_reservations(state, comment_id)
+                state["comments"].pop(comment_id, None)
 
             github.mutate_state(release_empty_comment)
-            github.edit_issue_comment(comment["id"], strip_status_block(comment.get("body", "")))
+            github.edit_issue_comment(comment["id"], strip_status_block(comment_body))
         return
     try:
+        if len(urls) > MAX_COMMENT_IMAGES:
+            raise BotError(f"A comment may contain at most {MAX_COMMENT_IMAGES} images")
         hashes = hash_attachment_urls(urls)
     except ImageTooLargeError as exc:
         comment_id = str(comment["id"])
@@ -679,7 +745,10 @@ def handle_issue_comment(github: GitHub, event):
         def release_oversize_comment(state):
             existing = state["comments"].get(comment_id)
             if existing:
-                existing["status"] = "unprocessed"
+                release_comment_reservations(state, comment_id)
+                existing["hashes"] = []
+                existing["claim_code"] = None
+                existing["status"] = "oversize"
                 existing["pr_number"] = None
 
         github.mutate_state(release_oversize_comment)
@@ -692,24 +761,11 @@ def handle_issue_comment(github: GitHub, event):
         print(f"::warning::{exc}")
         return
     except BotError as exc:
-        comment_id = str(comment["id"])
-
-        def release_invalid_comment(state):
-            existing = state["comments"].get(comment_id)
-            if not existing or existing.get("status") == "processing":
-                return
-            for digest, reservation in list(state["reserved"].items()):
-                if reservation.get("comment_id") == comment_id:
-                    reservation["pr_number"] = None
-            existing["status"] = "unprocessed"
-            existing["pr_number"] = None
-
-        github.mutate_state(release_invalid_comment)
         current = github.get_issue_comment(comment["id"])
         original_body = strip_status_block(current.get("body", ""))
         github.edit_issue_comment(
             comment["id"],
-            f"{STATUS_START}\n[ ⚪ 未处理 ]\n机器人暂时无法处理图片：{exc}。未占用任何哈希，请检查图片后编辑评论。\n{STATUS_END}\n\n{original_body}",
+            f"{STATUS_START}\n[ ⚪ 未处理 ]\n机器人暂时无法处理图片：{exc}。请检查图片后编辑评论重试。\n{STATUS_END}\n\n{original_body}",
         )
         print(f"::warning::{exc}")
         return
@@ -726,7 +782,6 @@ def handle_issue_comment(github: GitHub, event):
             result["status"] = "processing"
             return
 
-        own_hashes = set(existing.get("hashes", []))
         known = known_main | set(state["ingested"])
         known.update(
             digest
@@ -734,10 +789,7 @@ def handle_issue_comment(github: GitHub, event):
             if reservation.get("comment_id") != comment_id
         )
         duplicates = find_duplicates(hashes, known)
-        for digest in own_hashes:
-            reservation = state["reserved"].get(digest, {})
-            if reservation.get("comment_id") == comment_id:
-                reservation["pr_number"] = None
+        release_comment_reservations(state, comment_id)
 
         if duplicates:
             state["comments"][comment_id] = {
@@ -837,14 +889,6 @@ def process_pull_request(github: GitHub, pull_request):
     if (pull_request.get("base") or {}).get("ref") != "main":
         print(f"PR #{number} does not target main; hash check is skipped.")
         return
-    try:
-        subprocess.run(
-            ["git", "fetch", "--depth=1", "origin", f"pull/{number}/head"],
-            check=True,
-            capture_output=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise BotError(f"无法拉取 PR #{number} 的 Git 数据: {exc.stderr.decode()}")
     urls = new_data_urls(github, pull_request)
     claim_matches = CLAIM_PATTERN.findall(pull_request.get("body") or "")
     if not urls and not claim_matches:
@@ -868,13 +912,7 @@ def process_pull_request(github: GitHub, pull_request):
         def release_previous():
             if previous_comment_id:
                 result["released_comment_id"] = str(previous_comment_id)
-            for digest, reservation in list(state["reserved"].items()):
-                if str(reservation.get("pr_number")) != pr_key:
-                    continue
-                if reservation.get("comment_id"):
-                    reservation["pr_number"] = None
-                else:
-                    reservation["pr_number"] = None
+            release_pr_reservations(state, number)
             if previous_comment_id:
                 old_comment = state["comments"].get(str(previous_comment_id))
                 if old_comment and old_comment.get("pr_number") == number:
@@ -922,12 +960,7 @@ def process_pull_request(github: GitHub, pull_request):
             return
 
         current_hashes = set(hashes)
-        for digest, reservation in list(state["reserved"].items()):
-            if str(reservation.get("pr_number")) == pr_key and digest not in current_hashes:
-                if reservation.get("comment_id"):
-                    reservation["pr_number"] = None
-                else:
-                    reservation["pr_number"] = None
+        release_pr_reservations(state, number, set(state["reserved"]) - current_hashes)
 
         for digest in current_hashes:
             reservation = state["reserved"].get(digest)
@@ -994,6 +1027,11 @@ def close_pull_request(github: GitHub, pull_request):
         record = state["pull_requests"].get(pr_key)
         if not record:
             result["found"] = False
+            if merged:
+                for comment_id, comment in state["comments"].items():
+                    if comment.get("status") == "ingested" and comment.get("pr_number") == number:
+                        result["comment_id"] = comment_id
+                        break
             return
 
         comment_id = record.get("issue_comment_id")
@@ -1005,10 +1043,8 @@ def close_pull_request(github: GitHub, pull_request):
             if merged:
                 state["ingested"] = sorted(set(state["ingested"]) | {digest})
                 state["reserved"].pop(digest, None)
-            elif reservation.get("comment_id"):
-                reservation["pr_number"] = None
-            else:
-                reservation["pr_number"] = None
+        if not merged:
+            release_pr_reservations(state, number)
 
         if comment_id and str(comment_id) in state["comments"]:
             issue_record = state["comments"][str(comment_id)]
@@ -1037,13 +1073,7 @@ def release_pull_request_state(github: GitHub, number: int):
         if not record:
             return
         result["comment_id"] = record.get("issue_comment_id")
-        for digest, reservation in list(state["reserved"].items()):
-            if str(reservation.get("pr_number")) != str(number):
-                continue
-            if reservation.get("comment_id"):
-                reservation["pr_number"] = None
-            else:
-                reservation["pr_number"] = None
+        release_pr_reservations(state, number)
         if result.get("comment_id"):
             comment = state["comments"].get(str(result["comment_id"]))
             if comment:

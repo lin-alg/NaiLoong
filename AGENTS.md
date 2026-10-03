@@ -64,7 +64,7 @@
 - 当前项目的常规分类为 `animated`（动图）和 `static`（静态图）；数据结构不在校验器中硬编码只允许这两个分类。极短视频应转换成 GIF；较长视频不收录。
 - 新投稿 `url` 必须指向贡献者公开 Fork 中图片上传 commit 的 `NaiLoong/blob/<40位commit-sha>/<path>`、紧凑格式 `<fork-owner>/<40位commit-sha>/<path>` 或同一文件的 GitHub RAW URL。校验器把等价地址归一后检查重复。禁止使用会随分支后续提交改变内容的 `image` 分支 URL。校验器只校验 URL 结构，不联网请求图片；本地 `assets/placeholders/` 下已存在的占位资源例外保留。
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
-- 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存。预占位代表尚未彻底处理的图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`。
+- 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存。预占位代表仍有效的待处理图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`。待处理评论换图或清空时回收旧占位；未合并关闭 PR 时保留 Issue 投稿占位并解除认领，纯 PR 占位释放供重新检查。
 - 单张投稿图片严格小于或等于 5 MB；鼓励压到 2 MB 以下。数据校验器本身不下载 Fork 图片；`meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件来执行 5 MB 检查。
 - 修改维度顺序或已有维度内标签序号时，同步核查并迁移受影响条目。数组标签从来不表示展平序号；不得重新引入展平解释。
 - 修改数据规则时同步更新校验器、测试、项目开发指南的数据规范和相关投稿指南。
@@ -93,7 +93,8 @@ python -m http.server 8080
 - `.github/workflows/generate-previews.yml` 只在合并到 `main` 的 PR 关闭事件中运行，从合并后的数据记录下载新增或替换的原图，生成保留透明度的预览 WebP 并写入主仓库 `preview` 分支。
 - `meme-hash.yml` 不检出或执行 PR 分支代码；只用 GitHub API 读取 PR 文件和公开图片，避免 fork PR 获得主仓库写入逻辑的执行权。哈希状态使用 Actions Cache，所有读写由 workflow concurrency 串行保护；每日归档另外使用 concurrency 锁。
 - 数据校验器对 PR 图片 URL 不做联网探测；只检查 Fork URL 结构和仓库内重复 URL。`meme-hash.yml` 的哈希和体积 job 是单独的受信任主仓库 workflow；主仓库的占位资源例外。
-- 预览图路径为 `previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp`，最长边不超过 300 像素且严格小于 10 KiB；前端列表只加载预览图，点击卡片时在弹窗中加载原始 `url`，下载按钮和图片右键菜单也使用原始 `url`，PNG/GIF 透明度保留。
+- 预览图路径为 `previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp`，owner 与 commit 小写，原图路径保留原文件名及扩展名（例如 `laugh.gif.webp`）；最长边不超过 300 像素且严格小于 10 KiB。前端兼容旧的无原扩展名预览路径，列表只加载预览图，点击卡片时在弹窗中加载原始 `url`，下载按钮和图片右键菜单也使用原始 `url`，PNG/GIF 透明度保留。
+- Issue 投稿入库后不删除评论：Markdown 图片去掉感叹号成为普通链接，HTML 图片转为普通链接，再用 `RESOLVED` 折叠；保留说明和原始附件地址供追溯与人工找回。
 - 手动部署不能绕过检查。面向 fork PR 的 job 不得获得部署凭据。
 - 检查失败应修复数据、代码或测试，不要缩小触发范围、跳过失败步骤或接受违背数据契约的格式。
 

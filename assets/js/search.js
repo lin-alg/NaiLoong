@@ -39,8 +39,8 @@
   function findRecord(tagIndex, catKey, value) {
     const cat = tagIndex.cats.find((c) => c.key === catKey);
     if (!cat) return null;
-    if (typeof value === "string" && !/^\d+$/.test(value.trim())) {
-      return cat.items.find((item) => item.label === value.trim()) || null;
+    if (typeof value === "string") {
+      return cat.items.find((item) => item.label === value) || null;
     }
     const local = Number(value);
     return cat.items.find((item) => item.local === local) || null;
