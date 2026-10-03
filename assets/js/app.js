@@ -26,6 +26,13 @@
   };
   const cache = new Map();
   const context = { url: "", title: "", anchor: null };
+  let eggAudio = null;
+
+  const EASTER_EGG = {
+    src: "assets/audio/nailong_laugh.mp3",
+    chance: 0.25,
+    volume: 0.7
+  };
 
   const ICON_DOWNLOAD =
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 1.25a.75.75 0 0 1 .75.75v6.19l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.78 1.78V2A.75.75 0 0 1 8 1.25Z"/><path fill="currentColor" d="M2.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-2.5a.75.75 0 0 1 .75-.75Z"/></svg>';
@@ -879,6 +886,31 @@
     });
   }
 
+  function primeEasterEgg() {
+    if (eggAudio || typeof Audio !== "function") return;
+    try {
+      eggAudio = new Audio(EASTER_EGG.src);
+      eggAudio.preload = "auto";
+      eggAudio.volume = EASTER_EGG.volume;
+      // 提前缓冲，首次触发听不出加载延迟。
+      eggAudio.load();
+    } catch (err) {
+      eggAudio = null;
+    }
+  }
+
+  // 彩蛋：不弹提示、不打断操作，播放失败也保持静默。
+  function playEasterEgg() {
+    primeEasterEgg();
+    if (!eggAudio) return;
+    try {
+      eggAudio.currentTime = 0;
+      const playback = eggAudio.play();
+      if (playback && typeof playback.catch === "function") playback.catch(() => {});
+    } catch (err) {
+    }
+  }
+
   function bindEvents() {
     window.addEventListener("hashchange", applyRoute);
 
@@ -966,6 +998,11 @@
       if (!target) return;
       event.preventDefault();
       openContextMenu(event, target);
+    });
+
+    // 页面任意位置右键都有机会触发彩蛋，和图片菜单互不影响。
+    document.addEventListener("contextmenu", () => {
+      if (Math.random() < EASTER_EGG.chance) playEasterEgg();
     });
 
     el.ctxMenu.addEventListener("click", (event) => {
@@ -1079,6 +1116,7 @@
       window.GhImg.start();
     }
     bindEvents();
+    primeEasterEgg();
     setupReveal();
     el.grid.innerHTML = skeletonMarkup(8);
 
