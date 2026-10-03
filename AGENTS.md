@@ -93,7 +93,7 @@ python -m http.server 8080
 - `.github/workflows/generate-previews.yml` 只在合并到 `main` 的 PR 关闭事件中运行，从合并后的数据记录下载新增或替换的原图，生成保留透明度的预览 WebP 并写入主仓库 `preview` 分支。
 - `meme-hash.yml` 不检出或执行 PR 分支代码；只用 GitHub API 读取 PR 文件和公开图片，避免 fork PR 获得主仓库写入逻辑的执行权。哈希状态使用 Actions Cache，所有读写由 workflow concurrency 串行保护；每日归档另外使用 concurrency 锁。
 - 数据校验器对 PR 图片 URL 不做联网探测；只检查 Fork URL 结构和仓库内重复 URL。`meme-hash.yml` 的哈希和体积 job 是单独的受信任主仓库 workflow；主仓库的占位资源例外。
-- 预览图路径为 `previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp`，最长边不超过 300 像素且严格小于 10 KiB；前端列表只加载预览图，点击卡片时在弹窗中加载原始 `url`，下载按钮也使用原始 `url`，PNG/GIF 透明度保留。
+- 预览图路径为 `previews/<role-id>/<category-id>/<fork-owner>/<image-commit>/<原图路径>.webp`，最长边不超过 300 像素且严格小于 10 KiB；前端列表只加载预览图，点击卡片时在弹窗中加载原始 `url`，下载按钮和图片右键菜单也使用原始 `url`，PNG/GIF 透明度保留。
 - 手动部署不能绕过检查。面向 fork PR 的 job 不得获得部署凭据。
 - 检查失败应修复数据、代码或测试，不要缩小触发范围、跳过失败步骤或接受违背数据契约的格式。
 

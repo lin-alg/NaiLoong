@@ -45,7 +45,7 @@ node tests/ghimg.test.js
 
 `app.js` 从 `data/manifest.json` 读取角色和分类，再加载各分类文件及该角色的 `tags.json`。`search.js` 解析标签，建立搜索和筛选索引；维度显示名来自 `data/tag-translations.json`。
 
-列表根据条目的 `url` 推导主仓库 `preview` 分支中的 WebP 地址。点击卡片和下载按钮时才使用原图。`ghimg.js` 负责 GitHub 图片地址转换和请求失败后的回退。
+列表根据条目的 `url` 推导主仓库 `preview` 分支中的 WebP 地址。点击卡片、按下载按钮或在卡片和原图上右键时才使用原图；右键菜单提供下载原图、复制图片 URL 和复制为 Markdown。`ghimg.js` 负责 GitHub 图片地址转换和请求失败后的回退。
 
 ## 数据规范
 

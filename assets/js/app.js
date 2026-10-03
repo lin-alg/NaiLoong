@@ -25,11 +25,23 @@
     pageSize: DEFAULT_PAGE_SIZE
   };
   const cache = new Map();
+  const context = { url: "", title: "", anchor: null };
 
   const ICON_DOWNLOAD =
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 1.25a.75.75 0 0 1 .75.75v6.19l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.78 1.78V2A.75.75 0 0 1 8 1.25Z"/><path fill="currentColor" d="M2.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h8.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 12.25 15h-8.5A1.75 1.75 0 0 1 2 13.25v-2.5a.75.75 0 0 1 .75-.75Z"/></svg>';
   const ICON_ZOOM =
     '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"/><path d="M7 4.75v4.5M4.75 7h4.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/></svg>';
+  const ICON_LINK =
+    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25Zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0Z"/></svg>';
+  const ICON_MARKDOWN =
+    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14.85 3c.63 0 1.15.52 1.15 1.15v7.7c0 .63-.52 1.15-1.15 1.15H1.15c-.63 0-1.15-.52-1.15-1.15v-7.7C0 3.52.52 3 1.15 3ZM9 11v-4H7v4H5.5L8 13.5 10.5 7H9Zm4.5 0h-2V6h-2v5h-2l3 3.5 3-3.5Z"/></svg>';
+
+  const CTX_ACTIONS = [
+    { action: "download", label: "下载图片", icon: ICON_DOWNLOAD },
+    { action: "copy-url", label: "复制图片 URL", icon: ICON_LINK },
+    { action: "copy-markdown", label: "复制为 Markdown", icon: ICON_MARKDOWN }
+  ];
+  const CTX_MARGIN = 8;
 
   function $(id) {
     return document.getElementById(id);
@@ -305,12 +317,12 @@
     return (
       '<article class="card" style="--i:' +
       Math.min(index, STAGGER_CAP) +
-      '">' +
-      '<button class="card-open" type="button" data-original-url="' +
+      '" data-original-url="' +
       link +
       '" data-image-title="' +
       esc(item.title) +
-      '" aria-label="查看原图：' +
+      '">' +
+      '<button class="card-open" type="button" aria-label="查看原图：' +
       esc(item.title) +
       '">' +
       ICON_ZOOM +
@@ -551,13 +563,13 @@
     media.innerHTML = "<span>图裂了 · broken link</span>";
   }
 
-  async function downloadOriginal(link) {
-    const response = await fetch(link.href, { mode: "cors" });
+  async function downloadOriginal(url) {
+    const response = await fetch(url, { mode: "cors" });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
     const download = document.createElement("a");
-    const path = new URL(link.href).pathname;
+    const path = new URL(url).pathname;
     download.href = objectUrl;
     download.download = decodeURIComponent(path.slice(path.lastIndexOf("/") + 1)) || "meme";
     document.body.appendChild(download);
@@ -566,17 +578,206 @@
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   }
 
-  function showOriginalImage(button) {
-    const url = button.dataset.originalUrl;
+  function markdownOf(target) {
+    const alt = String(target.title || "").replace(/\s+/g, " ").replace(/[[\]]/g, "\\$&").trim();
+    return "![" + (alt || "表情") + "](" + target.url + ")";
+  }
+
+  function legacyCopy(text, stage) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.setAttribute("aria-hidden", "true");
+    area.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0;";
+    stage.appendChild(area);
+    let ok = false;
+    try {
+      area.select();
+      ok = document.execCommand("copy");
+    } catch (err) {
+      ok = false;
+    }
+    area.remove();
+    return ok;
+  }
+
+  async function copyText(text, stage) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+      }
+    }
+    return legacyCopy(text, stage || document.body);
+  }
+
+  function buildContextMenu() {
+    const menu = document.createElement("div");
+    menu.className = "ctx-menu";
+    menu.id = "ctxMenu";
+    menu.hidden = true;
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "图片操作");
+    menu.innerHTML = CTX_ACTIONS.map(
+      (item) =>
+        '<button class="ctx-item" type="button" role="menuitem" tabindex="-1" data-action="' +
+        esc(item.action) +
+        '"><span class="ctx-icon" aria-hidden="true">' +
+        item.icon +
+        '</span><span class="ctx-label">' +
+        esc(item.label) +
+        "</span></button>"
+    ).join("");
+    document.body.appendChild(menu);
+    return menu;
+  }
+
+  function imageTargetOf(node) {
+    if (!node || node.nodeType !== 1) return null;
+    const card = node.closest(".card");
+    if (card && card.dataset.originalUrl) {
+      return {
+        url: card.dataset.originalUrl,
+        title: card.dataset.imageTitle || "",
+        anchor: card.querySelector(".card-open") || card
+      };
+    }
+    const dialogImage = node.closest("#imageDialogImage");
+    if (dialogImage && dialogImage.dataset.originalUrl) {
+      return {
+        url: dialogImage.dataset.originalUrl,
+        title: dialogImage.dataset.imageTitle || "",
+        // 图片本身不可聚焦，键盘焦点交回弹窗内的关闭按钮，避免落到 inert 的 body 上。
+        anchor: el.imageDialogClose || dialogImage
+      };
+    }
+    return null;
+  }
+
+  function focusQuietly(node) {
+    if (!node) return;
+    try {
+      node.focus({ preventScroll: true });
+    } catch (err) {
+      node.focus();
+    }
+  }
+
+  function contextPoint(event, anchor) {
+    if (event.clientX || event.clientY) return { x: event.clientX, y: event.clientY };
+    const rect = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+    return rect ? { x: rect.left, y: rect.bottom } : { x: CTX_MARGIN, y: CTX_MARGIN };
+  }
+
+  function openContextMenu(event, target) {
+    const menu = el.ctxMenu;
+    const host = el.imageDialog.open ? el.imageDialog : document.body;
+    if (menu.parentNode !== host) host.appendChild(menu);
+
+    context.url = target.url;
+    context.title = target.title;
+    context.anchor = target.anchor;
+    menu.hidden = false;
+
+    const point = contextPoint(event, target.anchor);
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    const maxLeft = Math.max(CTX_MARGIN, window.innerWidth - CTX_MARGIN - width);
+    const maxTop = Math.max(CTX_MARGIN, window.innerHeight - CTX_MARGIN - height);
+    menu.style.left = Math.round(Math.min(Math.max(point.x, CTX_MARGIN), maxLeft)) + "px";
+    menu.style.top = Math.round(Math.min(Math.max(point.y, CTX_MARGIN), maxTop)) + "px";
+
+    const first = menu.querySelector(".ctx-item");
+    if (first) focusQuietly(first);
+  }
+
+  function closeContextMenu(restoreFocus) {
+    const menu = el.ctxMenu;
+    if (!menu || menu.hidden) return;
+    menu.hidden = true;
+    const anchor = context.anchor;
+    context.url = "";
+    context.title = "";
+    context.anchor = null;
+    if (restoreFocus && anchor && document.contains(anchor)) focusQuietly(anchor);
+  }
+
+  async function runContextAction(action) {
+    const target = { url: context.url, title: context.title };
+    const stage = el.ctxMenu.parentNode || document.body;
+    closeContextMenu(true);
+    if (!target.url) return;
+
+    if (action === "download") {
+      try {
+        await downloadOriginal(target.url);
+        toast("原图下载已开始");
+      } catch (err) {
+        window.open(target.url, "_blank", "noopener,noreferrer");
+        toast("无法直接下载，已在新窗口打开原图");
+      }
+      return;
+    }
+
+    const text = action === "copy-markdown" ? markdownOf(target) : target.url;
+    if (await copyText(text, stage)) {
+      toast(action === "copy-markdown" ? "已复制 Markdown" : "已复制图片 URL");
+    } else {
+      window.prompt("复制失败，请手动复制：", text);
+    }
+  }
+
+  function moveMenuFocus(step) {
+    const items = Array.prototype.slice.call(el.ctxMenu.querySelectorAll(".ctx-item"));
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement);
+    const index =
+      step === "first"
+        ? 0
+        : step === "last"
+          ? items.length - 1
+          : (current + step + items.length) % items.length;
+    focusQuietly(items[index]);
+  }
+
+  function menuKeydown(event) {
+    if (event.key === "Escape") {
+      // 让 Esc 只关掉菜单：阻止事件继续冒泡并取消默认行为，模态弹窗因此不会一起关闭。
+      event.preventDefault();
+      event.stopPropagation();
+      closeContextMenu(true);
+      return;
+    }
+    if (event.key === "Tab") {
+      closeContextMenu(true);
+      return;
+    }
+    const moves = {
+      ArrowDown: 1,
+      ArrowUp: -1,
+      Home: "first",
+      End: "last"
+    };
+    if (!(event.key in moves)) return;
+    event.preventDefault();
+    moveMenuFocus(moves[event.key]);
+  }
+
+  function showOriginalImage(card) {
+    const url = card && card.dataset ? card.dataset.originalUrl : "";
     if (!url) return;
     if (typeof el.imageDialog.showModal !== "function") {
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
 
+    const title = card.dataset.imageTitle || "原图";
     const image = el.imageDialogImage;
-    el.imageDialogTitle.textContent = button.dataset.imageTitle || "原图";
-    image.alt = button.dataset.imageTitle || "原图";
+    el.imageDialogTitle.textContent = title;
+    image.alt = title;
+    image.dataset.originalUrl = url;
+    image.dataset.imageTitle = title;
     image.hidden = false;
     el.imageDialogStatus.textContent = "正在加载原图…";
     el.imageDialogStatus.hidden = false;
@@ -748,7 +949,7 @@
       if (link) {
         event.preventDefault();
         try {
-          await downloadOriginal(link);
+          await downloadOriginal(link.href);
           toast("原图下载已开始");
         } catch (err) {
           window.open(link.href, "_blank", "noopener,noreferrer");
@@ -757,15 +958,45 @@
         return;
       }
       const openButton = event.target.closest(".card-open");
-      if (openButton) showOriginalImage(openButton);
+      if (openButton) showOriginalImage(openButton.closest(".card"));
     });
+
+    document.addEventListener("contextmenu", (event) => {
+      const target = imageTargetOf(event.target);
+      if (!target) return;
+      event.preventDefault();
+      openContextMenu(event, target);
+    });
+
+    el.ctxMenu.addEventListener("click", (event) => {
+      const item = event.target.closest(".ctx-item");
+      if (item) runContextAction(item.dataset.action);
+    });
+
+    el.ctxMenu.addEventListener("keydown", menuKeydown);
+
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!el.ctxMenu.hidden && !el.ctxMenu.contains(event.target)) closeContextMenu(false);
+      },
+      true
+    );
+
+    document.addEventListener("scroll", () => closeContextMenu(false), true);
+    window.addEventListener("resize", () => closeContextMenu(false));
+    window.addEventListener("blur", () => closeContextMenu(false));
 
     el.imageDialogClose.addEventListener("click", () => el.imageDialog.close());
     el.imageDialog.addEventListener("click", (event) => {
       if (event.target === el.imageDialog) el.imageDialog.close();
     });
     el.imageDialog.addEventListener("close", () => {
+      closeContextMenu(false);
+      if (el.ctxMenu.parentNode !== document.body) document.body.appendChild(el.ctxMenu);
       el.imageDialogImage.removeAttribute("src");
+      el.imageDialogImage.removeAttribute("data-original-url");
+      el.imageDialogImage.removeAttribute("data-image-title");
       delete el.imageDialogImage._gh;
       el.imageDialogImage.hidden = false;
       el.imageDialogStatus.textContent = "正在加载原图…";
@@ -835,6 +1066,7 @@
     el.imageDialogImage = $("imageDialogImage");
     el.imageDialogStatus = $("imageDialogStatus");
     el.imageDialogClose = $("imageDialogClose");
+    el.ctxMenu = buildContextMenu();
 
     const storedSize = Number(storageGet("nai-page-size"));
     if (PAGE_SIZES.includes(storedSize)) state.pageSize = storedSize;
