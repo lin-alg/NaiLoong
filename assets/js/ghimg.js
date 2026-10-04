@@ -45,16 +45,27 @@
     if (typeof url !== "string") return null;
     const clean = url.trim().split(/[?#]/)[0];
     let match = /^([A-Za-z0-9-]+)\/([0-9a-f]{40})\/(.+)$/i.exec(clean);
-    if (match) return { owner: match[1], commit: match[2].toLowerCase(), path: match[3] };
+    if (match) return { owner: match[1], repo: "NaiLoong", commit: match[2].toLowerCase(), path: match[3] };
     match = /^https?:\/\/github\.com\/([^/?#]+)\/([^/?#]+)\/(?:blob|raw)\/([^/?#]+)\/(.+)$/.exec(clean);
     if (match && /^[0-9a-f]{40}$/i.test(match[3])) {
-      return { owner: match[1], commit: match[3].toLowerCase(), path: match[4] };
+      return { owner: match[1], repo: match[2], commit: match[3].toLowerCase(), path: match[4] };
     }
     match = /^https?:\/\/raw\.githubusercontent\.com\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)\/(.+)$/.exec(clean);
     if (match && /^[0-9a-f]{40}$/i.test(match[3])) {
-      return { owner: match[1], commit: match[3].toLowerCase(), path: match[4] };
+      return { owner: match[1], repo: match[2], commit: match[3].toLowerCase(), path: match[4] };
     }
     return null;
+  }
+
+  function sourceDetails(url) {
+    const source = sourceParts(url);
+    if (!source) return null;
+    return {
+      owner: source.owner,
+      profileUrl: "https://github.com/" + source.owner,
+      url: "https://github.com/" + source.owner + "/" + source.repo + "/blob/" +
+        source.commit + "/" + source.path.split("/").map(encodePathPart).join("/")
+    };
   }
 
   function encodePathPart(value) {
@@ -236,6 +247,7 @@
       config = Object.assign({}, config, opts || {});
     },
     toRaw,
+    sourceDetails,
     preview,
     previewLegacy,
     candidates,

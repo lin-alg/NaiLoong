@@ -5,6 +5,7 @@ const vm = require("vm");
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync("assets/js/ghimg.js", "utf8"), context);
 const toRaw = context.window.GhImg.toRaw;
+const sourceDetails = context.window.GhImg.sourceDetails;
 const commit = "a".repeat(40);
 
 assert.strictEqual(
@@ -30,6 +31,21 @@ assert.strictEqual(
 assert.strictEqual(
   toRaw(`contributor/${commit}/assets/memes/meme.png`),
   `https://raw.githubusercontent.com/contributor/NaiLoong/${commit}/assets/memes/meme.png`
+);
+const compactSource = sourceDetails(`Musemantic/${commit}/assets/memes/meme.png`);
+assert.strictEqual(compactSource.owner, "Musemantic");
+assert.strictEqual(compactSource.profileUrl, "https://github.com/Musemantic");
+assert.strictEqual(
+  compactSource.url,
+  `https://github.com/Musemantic/NaiLoong/blob/${commit}/assets/memes/meme.png`
+);
+const rawSource = sourceDetails(
+  `https://raw.githubusercontent.com/Musemantic/NaiLoong/${commit}/assets/memes/meme%20one.png`
+);
+assert.strictEqual(rawSource.owner, "Musemantic");
+assert.strictEqual(
+  rawSource.url,
+  `https://github.com/Musemantic/NaiLoong/blob/${commit}/assets/memes/meme%20one.png`
 );
 assert.strictEqual(
   context.window.GhImg.preview(

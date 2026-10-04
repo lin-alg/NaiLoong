@@ -317,6 +317,9 @@
       : CONFIG.fallback;
     const src = esc(preview || localFallback);
     const link = esc(window.GhImg ? window.GhImg.link(item.url) : item.url);
+    const source = window.GhImg && window.GhImg.sourceDetails
+      ? window.GhImg.sourceDetails(item.url)
+      : null;
     const tags = window.MemeSearch.labelsOf(
       window.MemeSearch.resolveRawTags(item.tags, currentChar().tagIndex),
       currentChar().tagIndex
@@ -331,6 +334,12 @@
       link +
       '" data-image-title="' +
       esc(item.title) +
+      '" data-source-owner="' +
+      esc(source ? source.owner : "") +
+      '" data-source-owner-url="' +
+      esc(source ? source.profileUrl : "") +
+      '" data-source-file="' +
+      esc(source ? source.url : "") +
       '">' +
       '<button class="card-open" type="button" aria-label="查看原图：' +
       esc(item.title) +
@@ -432,7 +441,7 @@
       "</div>" +
       '<label class="pager-size">每页 <select class="page-size-select" aria-label="每页表情数">' +
       options +
-      "</select></label>"
+      "</select>条</label>"
     );
   }
 
@@ -816,8 +825,17 @@
     }
 
     const name = title || "原图";
+    const sourceFile = card.dataset.sourceFile || "";
+    const sourceOwner = card.dataset.sourceOwner || "";
     const image = el.imageDialogImage;
     el.imageDialogTitle.textContent = name;
+    el.imageDialogOwner.textContent = sourceOwner;
+    el.imageDialogOwner.href = card.dataset.sourceOwnerUrl || "#";
+    el.imageDialogOwner.hidden = !sourceOwner;
+    el.imageDialogSourceLink.href = sourceFile || "#";
+    el.imageDialogSource.hidden = !sourceFile;
+    el.imageDialogDownload.href = url;
+    el.imageDialogDownload.hidden = !url;
     image.alt = name;
     image.dataset.originalUrl = url;
     image.dataset.imageTitle = name;
@@ -1122,6 +1140,18 @@
     window.addEventListener("blur", () => closeContextMenu(false));
 
     el.imageDialogClose.addEventListener("click", () => el.imageDialog.close());
+    el.imageDialogDownload.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const url = el.imageDialogDownload.href;
+      if (!url || url === "#") return;
+      try {
+        await downloadOriginal(url);
+        toast("原图下载已开始");
+      } catch (err) {
+        window.open(url, "_blank", "noopener,noreferrer");
+        toast("无法直接下载，已在新窗口打开原图");
+      }
+    });
     el.imageDialog.addEventListener("click", (event) => {
       if (event.target === el.imageDialog) el.imageDialog.close();
     });
@@ -1131,6 +1161,13 @@
       el.imageDialogImage.removeAttribute("src");
       el.imageDialogImage.removeAttribute("data-original-url");
       el.imageDialogImage.removeAttribute("data-image-title");
+      el.imageDialogSource.hidden = true;
+      el.imageDialogOwner.textContent = "";
+      el.imageDialogOwner.hidden = true;
+      el.imageDialogOwner.removeAttribute("href");
+      el.imageDialogSourceLink.removeAttribute("href");
+      el.imageDialogDownload.hidden = true;
+      el.imageDialogDownload.removeAttribute("href");
       delete el.imageDialogImage._gh;
       el.imageDialogImage.hidden = false;
       el.imageDialogStatus.textContent = "正在加载原图…";
@@ -1211,6 +1248,10 @@
     el.themeIcon = $("themeIcon");
     el.imageDialog = $("imageDialog");
     el.imageDialogTitle = $("imageDialogTitle");
+    el.imageDialogSource = $("imageDialogSource");
+    el.imageDialogOwner = $("imageDialogOwner");
+    el.imageDialogSourceLink = $("imageDialogSourceLink");
+    el.imageDialogDownload = $("imageDialogDownload");
     el.imageDialogImage = $("imageDialogImage");
     el.imageDialogStatus = $("imageDialogStatus");
     el.imageDialogClose = $("imageDialogClose");

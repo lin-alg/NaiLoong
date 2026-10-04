@@ -1154,6 +1154,13 @@ code {
   border-bottom: 1px solid var(--border-muted);
 }
 
+.image-dialog-heading {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .image-dialog-title {
   min-width: 0;
   overflow: hidden;
@@ -1162,6 +1169,37 @@ code {
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.image-dialog-source {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--sp-3);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.image-dialog-owner {
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 500;
+}
+
+.image-dialog-owner:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.image-dialog-source-link {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.image-dialog-source-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .image-dialog-close {
