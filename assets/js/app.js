@@ -303,6 +303,19 @@
     return out;
   }
 
+  function imageCardData(url, title) {
+    const source = window.GhImg && window.GhImg.sourceDetails
+      ? window.GhImg.sourceDetails(url)
+      : null;
+    return {
+      originalUrl: window.GhImg ? window.GhImg.link(url) : url,
+      imageTitle: title || "原图",
+      sourceOwner: source ? source.owner : "",
+      sourceOwnerUrl: source ? source.profileUrl : "",
+      sourceFile: source ? source.url : ""
+    };
+  }
+
   function cardMarkup(item, charMeta, index) {
     const alt = item.title + " · " + charMeta.name;
     const sub = currentSub();
@@ -316,10 +329,8 @@
       ? item.url
       : CONFIG.fallback;
     const src = esc(preview || localFallback);
-    const link = esc(window.GhImg ? window.GhImg.link(item.url) : item.url);
-    const source = window.GhImg && window.GhImg.sourceDetails
-      ? window.GhImg.sourceDetails(item.url)
-      : null;
+    const cardData = imageCardData(item.url, item.title);
+    const link = esc(cardData.originalUrl);
     const tags = window.MemeSearch.labelsOf(
       window.MemeSearch.resolveRawTags(item.tags, currentChar().tagIndex),
       currentChar().tagIndex
@@ -335,11 +346,11 @@
       '" data-image-title="' +
       esc(item.title) +
       '" data-source-owner="' +
-      esc(source ? source.owner : "") +
+      esc(cardData.sourceOwner) +
       '" data-source-owner-url="' +
-      esc(source ? source.profileUrl : "") +
+      esc(cardData.sourceOwnerUrl) +
       '" data-source-file="' +
-      esc(source ? source.url : "") +
+      esc(cardData.sourceFile) +
       '">' +
       '<button class="card-open" type="button" aria-label="查看原图：' +
       esc(item.title) +
@@ -817,14 +828,16 @@
     moveMenuFocus(moves[event.key]);
   }
 
-  function openOriginal(url, title) {
+  function showOriginalImage(card) {
+    if (!card || !card.dataset) return;
+    const url = card.dataset.originalUrl || "";
     if (!url) return;
     if (typeof el.imageDialog.showModal !== "function") {
       window.open(url, "_blank", "noopener noreferrer");
       return;
     }
 
-    const name = title || "原图";
+    const name = card.dataset.imageTitle || "原图";
     const sourceFile = card.dataset.sourceFile || "";
     const sourceOwner = card.dataset.sourceOwner || "";
     const image = el.imageDialogImage;
@@ -848,11 +861,6 @@
     el.imageDialog.showModal();
   }
 
-  function showOriginalImage(card) {
-    if (!card || !card.dataset) return;
-    openOriginal(card.dataset.originalUrl, card.dataset.imageTitle || "原图");
-  }
-
   // 从当前（可能被搜索/标签筛选过的）结果里随机抽一张打开。
   function randomMeme() {
     const char = currentChar();
@@ -867,8 +875,8 @@
       return;
     }
     const row = list[Math.floor(Math.random() * list.length)];
-    const url = window.GhImg ? window.GhImg.link(row.item.url) : row.item.url;
-    openOriginal(url, row.item.title || "原图");
+    const card = { dataset: imageCardData(row.item.url, row.item.title) };
+    showOriginalImage(card);
   }
 
   function storageGet(key) {
