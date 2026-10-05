@@ -11,7 +11,6 @@ import html
 import json
 import os
 import re
-import secrets
 import sys
 import time
 from collections import Counter
@@ -36,6 +35,10 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_COMMENT_IMAGES = 5
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CLAIM_PATTERN = re.compile(r"\bMEME-CLAIM-[0-9a-f]{24}\b")
+COMMENT_LINK_PATTERN = re.compile(
+    r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([0-9]+)#issuecomment-([0-9]+)",
+    re.IGNORECASE,
+)
 MARKDOWN_IMAGE_PATTERN = re.compile(
     r"!\[[^\]]*\]\(\s*(?:<([^>]+)>|(https?://[^\s)>]+))[^)]*\)",
     re.IGNORECASE,
@@ -611,12 +614,30 @@ def hash_text(github: GitHub):
     return parse_hash_file(text or "")
 
 
-def issue_status_body(status, hashes=None, claim_code=None, pr_number=None):
+def issue_comment_url(comment_id):
+    return f"https://github.com/{REPOSITORY}/issues/{ISSUE_NUMBER}#issuecomment-{comment_id}"
+
+
+def issue_status_body(status, hashes=None, claim_code=None, pr_number=None, comment_id=None):
     if status == "unprocessed":
+        if comment_id:
+            reference = (
+                f"认领链接：[直接复制此评论的链接]({issue_comment_url(comment_id)})\n"
+                "贡献者请在 PR 描述中粘贴此链接；一个 PR 可以认领多条评论，"
+                "并需包含每条评论中的全部图片。"
+            )
+            if claim_code:
+                reference += f"\n兼容旧格式：旧认领口令 `{claim_code}` 仍然有效。"
+            return f"[ ⚪ 未处理 ]\n\n{reference}"
         return (
             "[ ⚪ 未处理 ]\n\n"
-            f"认领口令：`{claim_code}`\n"
-            "处理者请在 PR 描述中原样填写此口令；一个 PR 需包含该评论中的全部图片。"
+            + (
+                f"旧认领口令：`{claim_code}`\n"
+                "处理者也可以直接粘贴这条评论的 GitHub 链接；"
+                "一个 PR 需包含该评论中的全部图片。"
+                if claim_code
+                else "处理者请粘贴这条评论的 GitHub 链接到 PR 描述；一个 PR 需包含该评论中的全部图片。"
+            )
         )
     if status == "processing":
         return f"[ 🟡 处理中 ]\n\n已由 [PR #{pr_number}](https://github.com/{REPOSITORY}/pull/{pr_number}) 认领。"
@@ -668,6 +689,7 @@ def issue_comment_reply(github: GitHub, comment_id, state, status, hashes=None):
         hashes,
         record.get("claim_code"),
         record.get("pr_number"),
+        comment_id,
     )
     body = f"{STATUS_START}\n{status_text}\n{STATUS_END}\n\n{original_body}"
     try:
@@ -771,7 +793,6 @@ def handle_issue_comment(github: GitHub, event):
         return
 
     comment_id = str(comment["id"])
-    claim_code = f"MEME-CLAIM-{secrets.token_hex(12)}"
     result = {}
 
     def update(state):
@@ -800,7 +821,9 @@ def handle_issue_comment(github: GitHub, event):
             result.update(status="duplicate", duplicates=duplicates)
             return
 
-        code = existing.get("claim_code") or claim_code
+        # New comments use their stable GitHub comment URL. Keep a previously
+        # issued code only so old PRs can continue to be checked.
+        code = existing.get("claim_code")
         state["comments"][comment_id] = {
             "hashes": sorted(set(hashes)),
             "claim_code": code,
@@ -846,7 +869,28 @@ def find_claim_comment(state, claim_code):
     return matches[0]
 
 
-def pr_duplicate_errors(hashes, state, main_hashes, number, allowed_comment_id=None):
+def parse_claim_comment_links(body):
+    links = []
+    repository = REPOSITORY.lower()
+    for match in COMMENT_LINK_PATTERN.finditer(body or ""):
+        owner, repo, issue_number, comment_id = match.groups()
+        if f"{owner}/{repo}".lower() != repository or issue_number != str(ISSUE_NUMBER):
+            raise BotError(
+                "PR description contains an issue comment link from the wrong repository or issue"
+            )
+        links.append((comment_id, match.group(0)))
+    return links
+
+
+def pull_request_comment_ids(record):
+    ids = record.get("issue_comment_ids")
+    if isinstance(ids, list):
+        return [str(comment_id) for comment_id in ids if comment_id is not None]
+    old_id = record.get("issue_comment_id")
+    return [str(old_id)] if old_id is not None else []
+
+
+def pr_duplicate_errors(hashes, state, main_hashes, number, allowed_comment_ids=None):
     known = set(main_hashes) | set(state["ingested"])
     result = []
     seen = set()
@@ -860,13 +904,19 @@ def pr_duplicate_errors(hashes, state, main_hashes, number, allowed_comment_id=N
             seen.add(digest)
 
     pr_key = str(number)
+    if allowed_comment_ids is None:
+        allowed_comment_ids = set()
+    elif isinstance(allowed_comment_ids, str):
+        allowed_comment_ids = {allowed_comment_ids}
+    else:
+        allowed_comment_ids = {str(comment_id) for comment_id in allowed_comment_ids}
     for index, digest in enumerate(hashes, 1):
         reservation = state["reserved"].get(digest)
         if not reservation:
             continue
         if str(reservation.get("pr_number")) == pr_key:
             continue
-        if allowed_comment_id and reservation.get("comment_id") == allowed_comment_id:
+        if reservation.get("comment_id") in allowed_comment_ids:
             continue
         result.append((index, digest, "reserved by another submission"))
     return result
@@ -890,16 +940,20 @@ def process_pull_request(github: GitHub, pull_request):
         print(f"PR #{number} does not target main; hash check is skipped.")
         return
     urls = new_data_urls(github, pull_request)
-    claim_matches = CLAIM_PATTERN.findall(pull_request.get("body") or "")
-    if not urls and not claim_matches:
+    pr_body = pull_request.get("body") or ""
+    claim_matches = CLAIM_PATTERN.findall(pr_body)
+    claim_links = parse_claim_comment_links(pr_body)
+    unique_claim_matches = list(dict.fromkeys(claim_matches))
+    unique_claim_links = list(dict.fromkeys(claim_links))
+    if len(unique_claim_matches) > 1:
+        raise BotError("PR description contains more than one legacy claim code")
+    if not urls and not unique_claim_matches and not unique_claim_links:
         state, _ = github.load_state()
         if str(number) not in state["pull_requests"]:
             print(f"PR #{number} does not add meme image URLs; hash check has nothing to reserve.")
             return
     hashes = hash_fork_urls(urls)
-    claim_code = claim_matches[0] if len(set(claim_matches)) == 1 else None
-    if len(set(claim_matches)) > 1:
-        raise BotError("PR description contains more than one claim code")
+    claim_code = unique_claim_matches[0] if unique_claim_matches else None
     result = {}
 
     def update(state):
@@ -907,52 +961,67 @@ def process_pull_request(github: GitHub, pull_request):
         main_hashes = hash_text(github)
         pr_key = str(number)
         previous = state["pull_requests"].get(pr_key, {})
-        previous_comment_id = previous.get("issue_comment_id")
+        previous_comment_ids = pull_request_comment_ids(previous)
 
         def release_previous():
-            if previous_comment_id:
-                result["released_comment_id"] = str(previous_comment_id)
+            if previous_comment_ids:
+                result["released_comment_ids"] = previous_comment_ids
             release_pr_reservations(state, number)
-            if previous_comment_id:
+            for previous_comment_id in previous_comment_ids:
                 old_comment = state["comments"].get(str(previous_comment_id))
                 if old_comment and old_comment.get("pr_number") == number:
                     old_comment["pr_number"] = None
                     old_comment["status"] = "unprocessed"
             state["pull_requests"].pop(pr_key, None)
 
-        if previous_comment_id and not claim_code:
+        if previous_comment_ids and not (claim_code or unique_claim_links):
             release_previous()
-            result.update(ok=False, reason="Keep the issue claim code in the PR description.")
+            result.update(ok=False, reason="Keep at least one issue comment link in the PR description.")
             return
 
-        issue_comment_id = None
+        issue_comment_ids = [comment_id for comment_id, _ in unique_claim_links]
         if claim_code:
-            issue_comment_id, issue_record = find_claim_comment(state, claim_code)
-            print(f"::notice::[DEBUG] urls = {urls}")
-            print(f"::notice::[DEBUG] PR hashes = {hashes}")
-            print(f"::notice::[DEBUG] Issue expected hashes = {issue_record.get('hashes', []) if issue_record else 'None (未找到认领记录)'}")
+            legacy_comment_id, _ = find_claim_comment(state, claim_code)
+            if not legacy_comment_id:
+                release_previous()
+                result.update(ok=False, reason="The legacy issue claim code is unknown or expired.")
+                return
+            issue_comment_ids.append(str(legacy_comment_id))
+        issue_comment_ids = list(dict.fromkeys(issue_comment_ids))
+        issue_records = []
+        for issue_comment_id in issue_comment_ids:
+            issue_record = state["comments"].get(str(issue_comment_id))
+            print(f"::notice::[DEBUG] Issue comment {issue_comment_id} expected hashes = "
+                  f"{issue_record.get('hashes', []) if issue_record else 'None (未找到认领记录)'}")
             if issue_record is None:
                 release_previous()
-                result.update(ok=False, reason="The issue claim code is unknown or expired.")
+                result.update(ok=False, reason="One of the issue comment links or claim codes is unknown or expired.")
                 return
             if issue_record.get("status") == "ingested":
                 release_previous()
-                result.update(ok=False, reason="This issue submission is already merged.")
+                result.update(ok=False, reason="One of the issue submissions is already merged.")
                 return
             if issue_record.get("pr_number") not in (None, number):
                 release_previous()
-                result.update(ok=False, reason="This issue submission is already claimed by another PR.")
+                result.update(ok=False, reason="One of the issue submissions is already claimed by another PR.")
                 return
-            if set(hashes) != set(issue_record.get("hashes", [])):
-                release_previous()
-                result.update(
-                    ok=False,
-                    reason="The PR image hashes must exactly match all images in the claimed issue comment.",
-                )
-                return
+            issue_records.append(issue_record)
 
+        expected_hashes = set()
+        for issue_record in issue_records:
+            expected_hashes.update(issue_record.get("hashes", []))
+        print(f"::notice::[DEBUG] PR hashes = {hashes}")
+        if issue_records and set(hashes) != expected_hashes:
+            release_previous()
+            result.update(
+                ok=False,
+                reason="The PR image hashes must exactly match all images in the claimed issue comments.",
+            )
+            return
+
+        allowed_comment_ids = set(issue_comment_ids)
         duplicates = pr_duplicate_errors(
-            hashes, state, main_hashes, number, str(issue_comment_id) if issue_comment_id else None
+            hashes, state, main_hashes, number, allowed_comment_ids
         )
         if duplicates:
             release_previous()
@@ -961,55 +1030,67 @@ def process_pull_request(github: GitHub, pull_request):
 
         current_hashes = set(hashes)
         release_pr_reservations(state, number, set(state["reserved"]) - current_hashes)
+        current_comment_ids = set(issue_comment_ids)
+        for previous_comment_id in previous_comment_ids:
+            if previous_comment_id in current_comment_ids:
+                continue
+            old_comment = state["comments"].get(previous_comment_id)
+            if old_comment and old_comment.get("pr_number") == number:
+                old_comment["status"] = "unprocessed"
+                old_comment["pr_number"] = None
 
         for digest in current_hashes:
             reservation = state["reserved"].get(digest)
-            if reservation and issue_comment_id and reservation.get("comment_id") == str(issue_comment_id):
+            if reservation and reservation.get("comment_id") in allowed_comment_ids:
                 reservation["pr_number"] = number
             else:
                 state["reserved"][digest] = {
                     "kind": "pull_request",
                     "pr_number": number,
                     "claim_code": claim_code,
-                    "comment_id": str(issue_comment_id) if issue_comment_id else None,
+                    "comment_id": None,
                 }
 
-        if not current_hashes and not issue_comment_id:
+        if not current_hashes and not issue_comment_ids:
             state["pull_requests"].pop(pr_key, None)
-            result.update(ok=True, issue_comment_id=None)
+            result.update(ok=True, issue_comment_ids=[])
             return
 
         state["pull_requests"][pr_key] = {
             "hashes": sorted(current_hashes),
-            "issue_comment_id": str(issue_comment_id) if issue_comment_id else None,
+            "issue_comment_ids": issue_comment_ids,
+            "claim_links": [link for _, link in unique_claim_links],
+            "claim_codes": [claim_code] if claim_code else [],
+            # Keep the old fields readable for cache entries created before multi-claim support.
+            "issue_comment_id": issue_comment_ids[0] if len(issue_comment_ids) == 1 else None,
             "claim_code": claim_code,
         }
-        if issue_comment_id:
+        for issue_comment_id in issue_comment_ids:
             issue_record = state["comments"][str(issue_comment_id)]
             issue_record["status"] = "processing"
             issue_record["pr_number"] = number
-        result.update(ok=True, issue_comment_id=issue_comment_id)
+        result.update(ok=True, issue_comment_ids=issue_comment_ids)
 
     github.mutate_state(update)
     state = _current_state(github)
     if not result.get("ok"):
         message = result.get("reason") or duplicate_pr_message(result.get("duplicates", []))
         github.pr_status_comment(number, message)
-        if result.get("released_comment_id"):
+        for released_comment_id in result.get("released_comment_ids", []):
             issue_state = _current_state(github)
             issue_comment_reply(
                 github,
-                result["released_comment_id"],
+                released_comment_id,
                 issue_state,
                 "unprocessed",
             )
         raise BotError(message)
 
-    if result.get("issue_comment_id"):
+    for issue_comment_id in result.get("issue_comment_ids", []):
         issue_state = _current_state(github)
         issue_comment_reply(
             github,
-            result["issue_comment_id"],
+            issue_comment_id,
             issue_state,
             "processing",
         )
@@ -1028,13 +1109,13 @@ def close_pull_request(github: GitHub, pull_request):
         if not record:
             result["found"] = False
             if merged:
+                result["comment_ids"] = []
                 for comment_id, comment in state["comments"].items():
                     if comment.get("status") == "ingested" and comment.get("pr_number") == number:
-                        result["comment_id"] = comment_id
-                        break
+                        result["comment_ids"].append(comment_id)
             return
 
-        comment_id = record.get("issue_comment_id")
+        comment_ids = pull_request_comment_ids(record)
         hashes = set(record.get("hashes", []))
         for digest in hashes:
             reservation = state["reserved"].get(digest)
@@ -1046,18 +1127,20 @@ def close_pull_request(github: GitHub, pull_request):
         if not merged:
             release_pr_reservations(state, number)
 
-        if comment_id and str(comment_id) in state["comments"]:
+        for comment_id in comment_ids:
+            if str(comment_id) not in state["comments"]:
+                continue
             issue_record = state["comments"][str(comment_id)]
             issue_record["status"] = "ingested" if merged else "unprocessed"
             issue_record["pr_number"] = number if merged else None
         state["pull_requests"].pop(pr_key, None)
-        result.update(found=True, comment_id=comment_id, hashes=sorted(hashes))
+        result.update(found=True, comment_ids=comment_ids, hashes=sorted(hashes))
 
     github.mutate_state(update)
-    if result.get("comment_id"):
+    status = "ingested" if merged else "unprocessed"
+    for comment_id in result.get("comment_ids", []):
         issue_state = _current_state(github)
-        status = "ingested" if merged else "unprocessed"
-        issue_comment_reply(github, result["comment_id"], issue_state, status)
+        issue_comment_reply(github, comment_id, issue_state, status)
     if result.get("found"):
         if merged:
             print(f"Moved {len(result['hashes'])} image hash(es) to the ingested cache for PR #{number}.")
@@ -1072,16 +1155,16 @@ def release_pull_request_state(github: GitHub, number: int):
         record = state["pull_requests"].pop(str(number), None)
         if not record:
             return
-        result["comment_id"] = record.get("issue_comment_id")
+        result["comment_ids"] = pull_request_comment_ids(record)
         release_pr_reservations(state, number)
-        if result.get("comment_id"):
-            comment = state["comments"].get(str(result["comment_id"]))
+        for comment_id in result.get("comment_ids", []):
+            comment = state["comments"].get(str(comment_id))
             if comment:
                 comment["status"] = "unprocessed"
                 comment["pr_number"] = None
 
     github.mutate_state(update)
-    return result.get("comment_id")
+    return result.get("comment_ids", [])
 
 
 def archive_ingested_hashes(github: GitHub):
@@ -1144,13 +1227,13 @@ def handle_event(github: GitHub, event_name: str, event):
                 process_pull_request(github, pull_request)
             except ImageTooLargeError as exc:
                 number = int(pull_request["number"])
-                comment_id = release_pull_request_state(github, number)
+                comment_ids = release_pull_request_state(github, number)
                 github.pr_status_comment(
                     number,
                     "[ ❌ 图片过大 ]\n\n"
                     f"{exc}。单张图片严格不能超过 5 MB；请压缩图片后更新 PR。",
                 )
-                if comment_id:
+                for comment_id in comment_ids:
                     issue_comment_reply(github, comment_id, _current_state(github), "unprocessed")
                 raise
         return

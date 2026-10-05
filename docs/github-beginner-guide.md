@@ -216,9 +216,7 @@ Github 用户名请填用户名而非昵称。比如下图括号中的名字即�
 > ![alt text](images/image0011.png)
 
 > 如图，commit 的哈希值为 8b5ba9fc738254dd52ffa08106c87c44ad54df1c
-## 五. 创建工作分支并填写 JSON 字段
-
-> 这里的其实可以用可视化工具操作，目前还未做好，稍微麻烦大家了~
+## 五. 创建工作分支并使用数据编辑器编辑表情数据
 
 回到主仓库的最新数据，创建这次投稿的工作分支：
 
@@ -231,63 +229,73 @@ git switch -c meme/naiwa-laugh
 
 `meme/naiwa-laugh` 是示例分支名，可以换成描述本次投稿的分支名字。
 
-用文本编辑器打开 `data/manifest.json`，找到角色及其分类文件。例如奶蛙动图写入 `data/naiwa/animated.json`，奶蛙静态图写入 `data/naiwa/static.json`。
+### 1. 安装 Python
 
-分类文件是一个数组，格式如下：
+编辑器使用 Python 自带的 Tkinter 图形界面库，不需要安装第三方 Python 包。Windows 用户从 [Python 官网](https://www.python.org/downloads/) 安装 Python 3，安装界面请勾选 **Add Python to PATH**。安装后在 Git Bash 或 PowerShell 检查：
 
-```json
-[
-  {
-    "title": "奶蛙狂笑",
-    "url": "你的GitHub用户名/<40位图片commit SHA>/assets/memes/meme.gif",
-    "tags": [2, 0, 0]
-  },
-  {
-    "title": "xxxx",
-    "url": "xxxx",
-    "tags": [1,null,0]
-  }
-  ...（省略)
-]
+```bash
+python --version
+```
+应输出python版本号。
+Windows 上 运行`python` 命令可能会打开微软商店，可改用 Python 启动器：
+
+```bash
+py --version
 ```
 
-已有记录时，在数组末尾追加一个大括号对象，给前一项补逗号；最后一项后面不加逗号。把标题和 URL 换成实际内容就好。
+Linux 用户如果启动时报 Tkinter 缺失，请安装发行版提供的 `python3-tk`，然后重新运行编辑器。编辑器不使用 `pip install`，也不需要虚拟环境。
 
-每个角色都有一个 `tags.json`。以奶蛙为例：
+### 2. 启动编辑器
 
-```json
-{
-  "smile": {
-    "0": "轻松绷住",
-    "1": "憋笑",
-    "2": "大笑"
-  },
-  "age limit": {
-    "0": "老少咸宜",
-    "1": "朋友整活",
-    "2": "重口"
-  },
-  "artistic merit": {
-    "0": "下里巴人",
-    "1": "日常",
-    "2": "阳春白雪"
-  }
-}
+在仓库根目录运行下面的命令。命令最后的 `data` 是仓库里的数据文件夹，可以替换成你本地仓库的实际路径：
+
+```bash
+python scripts/data_editor.py data
 ```
-奶蛙目前有三种标签，每种标签都可以选择对应的值。
-所以 `[2, 0, 0]` 表示的是“大笑”，“老少皆宜”，“下里巴人”。
 
-标签的值暂时不确定时写 `null`。例如 `[2, 0, null]` 表示你暂时还不知道这张表情包的艺术价值是怎么样的。不过最好是所有标签都选择一个固定的值。
+Windows 也可以运行：
 
-如果你安装了 Python ，保存后运行 `python scripts/validate_data.py` 检查数据是否有错误。
+```powershell
+py scripts/data_editor.py data
+```
+
+编辑器打开后会自动读取 `data/manifest.json`，角色、分类和标签选项都来自当前数据，不需要手动编辑json文件。
+
+### 3. 填写记录
+
+1. 在顶部选择角色和分类，例如“奶蛙”和“动图”。
+2. 点击 **新增记录**。
+3. 填写表情标题。
+4. 填写图片 URL。使用第 4 步记下的紧凑格式：`你的用户名/<40位图片commit SHA>/assets/memes/meme.gif`。
+5. 为每个标签选择最合适的值；暂时无法判断时选择“未知”，编辑器会保存为 `null`。
+6. 点击 **保存当前记录**。编辑器会格式化对应 JSON，并自动运行完整数据校验；出现错误时会撤销这次保存并显示原因。
+
+列表中的已有记录也可以直接选择后修改。修订记录时保留原来的图片 URL，除非你确实上传了新的图片替换原图。
+
+编辑器只是帮助填写数据，不会上传图片、创建分支或执行 Git 命令。仍要先推送图片到自己的公开 `image` 分支。
+
+顶部的 **管理角色** 可以新增、修改或删除角色；角色选择区的 **管理分类** 可以新增、修改或删除当前角色的分类。**管理标签** 只允许新增标签、修改标签名称和中英文翻译，不能删除标签或修改标签值名称，以免误删数据。新增标签时，编辑器会自动给该角色所有分类的已有条目补入 `null`。
+
+图片 URL 也可以粘贴完整的 GitHub `blob` / `raw` 地址，编辑器保存时会自动转换成项目使用的 `用户名/40位commit/路径` 紧凑格式。
+
+### 4. 在本地运行检查
+
+编辑器保存时已经自动校验数据；提交前仍建议在仓库根目录运行一次完整的 Python 检查：
+
+```bash
+python scripts/validate_data.py
+python -m unittest discover -s tests -v
+```
+
+第一条检查 `data/` 的结构、标签和图片 URL 是否规范，第二条运行项目的 Python 自动化测试。它们都只使用 Python 标准库，不需要 `pip install`。
 
 ## 六. 提交并创建 PR
 
-下面以奶蛙动图为例；文件路径和分支名要换成自己的实际值。
+下面以新增奶蛙动图为例；分支名和编辑器实际修改的分类文件要换成自己的值。
 
 ```bash
 git status
-git add data/naiwa/animated.json
+git add data/naiwa/animated.json # naiwa指奶蛙角色，animated指动图。
 git status
 git commit -m "feat: 添加奶蛙狂笑表情"
 git push -u origin meme/naiwa-laugh
@@ -297,15 +305,15 @@ git push -u origin meme/naiwa-laugh
 
 1. 在浏览器打开自己的 Fork 仓库，点击 **Compare & pull request**。没有这个按钮时，进入 **Pull requests → New pull request**。
 2. 目标选择 `lin-alg/NaiLoong` 的 `main`，来源选择自己 Fork 的 `meme/naiwa-laugh` 工作分支。
-3. 查看 **Files changed**，确认只有JSON的改动，图片文件未修改。
-4. 写明角色、分类和图片来源（如必要）。如果是整理投稿区的表情，请把改评论顶部的 `MEME-CLAIM-...` 口令复制粘贴进 PR 描述。确保**一个 PR 只认领一条评论**，并已收录该评论的全部图片。
+3. 查看 **Files changed**，确认只有 JSON 的改动，图片文件未修改。
+4. 写明角色、分类和图片来源（如必要）。如果是整理投稿区的表情，请把每条评论的完整链接粘贴进 PR 描述，例如 `https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-123456`。一个 PR 可以认领多条评论，但必须收录这些评论中的全部图片。旧 PR 也可以继续使用 `MEME-CLAIM-...` 口令。
 5. 点击 **Create pull request**，等待 Github Action 检查代码。如有报错时查看详情，按 [FAQ](#pr-检查失败怎么修改) 重新更改代码，然后commit。
 
 维护者审核并合并后，网站会自动生成预览图并更新。投稿者不用拉取仓库的`preview`分支。
 
 ## 修订已有表情
 
-从最新 `main` 分支创建工作分支，在 `data/` 中搜索标题或 URL，找到原条目后修改。
+从最新 `main` 分支创建工作分支，在编辑器中选择对应角色和分类，找到原条目后修改。
 
 - 只改标题或标签：保留原来的 `url`。
 - 替换自己或他人的图片（比如原图不够清晰，原Fork仓库失效等）：上传新图到自己的 `image` 分支，再把原 URL 地址中的用户名和哈希值修改为自己的 GitHub 用户名和本次新 commit 的哈希值。
@@ -357,7 +365,7 @@ git branch -d meme/naiwa-laugh
 
 打开检查详情，找到报错文件和条目。
 1. JSON 错误：重点检查逗号、引号和括号。
-2. 标签错误：对照检查该角色的 `tags.json`。
+2. 标签错误：重新打开编辑器，对照下拉选项修改标签；如果是 JSON 或 URL 错误，也可以直接检查编辑器填写的字段。
 
 在同一工作分支上修改后运行命令：
   ```bash
@@ -367,7 +375,7 @@ git branch -d meme/naiwa-laugh
   git push
   ```
 原 PR 会根据新的commit自动检查，不用重新创建PR。
-如果提示认领图片不匹配，确认PR描述中只填了一个正确的MEME-CLAIM口令，收录了该评论全部原图，且没有压缩、转码或附加其他额外图片。
+如果提示认领图片不匹配，确认 PR 描述中填的是正确的评论完整链接，收录了你要认领的所有评论中的全部原图，且没有压缩、转码或附加其他额外图片（如果要附加自己的图片请单独开一个PR）。旧 PR 如果仍使用口令，确认只填了一个正确的 `MEME-CLAIM-...` 口令。
 报错中的 `entry #0` 是数组第 1 项，`entry #1` 是第 2 项，以此类推。
 
 如果问题仍未解决，请提Issue咨询。

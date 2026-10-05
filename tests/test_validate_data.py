@@ -124,7 +124,7 @@ class ValidateDataTests(unittest.TestCase):
             "url": f"https://github.com/mixedowner/NaiLoong/blob/{IMAGE_COMMIT}/assets/memes/meme.png",
         })
         self.write_json("data/naiwa/animated.json", entries)
-        self.assertTrue(any("duplicate image URL" in error for error in validate_data(self.root)))
+        self.assertTrue(any("图片链接重复" in error for error in validate_data(self.root)))
 
     def test_requires_bilingual_names_for_tag_dimensions(self):
         self.write_json(
@@ -163,7 +163,7 @@ class ValidateDataTests(unittest.TestCase):
         self.write_json("data/naiwa/animated.json", entries)
 
         errors = validate_data(self.root)
-        self.assertTrue(any("duplicate image URL" in error for error in errors))
+        self.assertTrue(any("图片链接重复" in error for error in errors))
 
     def test_rejects_tag_array_with_wrong_dimension_count(self):
         entries = json.loads((self.root / "data/naiwa/animated.json").read_text(encoding="utf-8"))
@@ -200,7 +200,7 @@ class ValidateDataTests(unittest.TestCase):
         self.write_json("data/naiwa/animated.json", entries)
 
         errors = validate_data(self.root)
-        self.assertTrue(any("duplicate image URL" in error for error in errors))
+        self.assertTrue(any("图片链接重复" in error for error in errors))
 
     def test_rejects_duplicate_json_keys(self):
         path = self.root / "data/naiwa/animated.json"

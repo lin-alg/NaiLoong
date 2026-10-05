@@ -200,8 +200,8 @@ def validate_data(root: Path | str) -> list[str]:
                     previous = seen_urls.get(normalized_url)
                     if previous:
                         errors.append(
-                            f'{entry_owner}: duplicate image URL also used by {previous}: '
-                            f'{entry.get("url")}'
+                            f'{entry_owner}: 与 {previous}: '
+                            f'{entry.get("url")} 的图片链接重复。'
                         )
                     else:
                         seen_urls[normalized_url] = entry_owner

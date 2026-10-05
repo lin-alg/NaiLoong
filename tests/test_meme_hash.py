@@ -13,11 +13,19 @@ from scripts.generate_previews import (
     new_preview_entries,
     preview_relative_path,
 )
+from scripts.data_editor import (
+    migrate_entry_tags,
+    normalize_image_url,
+    tag_dimensions,
+    tags_to_values,
+    values_to_tags,
+)
 from scripts.meme_hash import (
     added_canonical_urls,
     find_duplicates,
     normalize_state,
     parse_issue_image_urls,
+    parse_claim_comment_links,
     parse_hash_file,
     strip_status_block,
     validate_image_payload,
@@ -194,9 +202,97 @@ class MemeHashTests(unittest.TestCase):
         )
         self.assertEqual(strip_status_block(body), "投稿者的说明和图片链接")
 
+    def test_comment_link_is_a_valid_multi_claim_reference(self):
+        body = (
+            "来源：\n"
+            "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-123\n"
+            "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-456"
+        )
+        self.assertEqual(
+            parse_claim_comment_links(body),
+            [
+                ("123", "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-123"),
+                ("456", "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-456"),
+            ],
+        )
+
+    def test_comment_link_rejects_another_repository(self):
+        with self.assertRaisesRegex(Exception, "wrong repository"):
+            parse_claim_comment_links(
+                "https://github.com/another/project/issues/1#issuecomment-123"
+            )
+
+    def test_unprocessed_status_exposes_comment_link_and_keeps_legacy_code(self):
+        body = meme_hash.issue_status_body(
+            "unprocessed",
+            claim_code="MEME-CLAIM-" + "a" * 24,
+            comment_id="123",
+        )
+        self.assertIn("https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-123", body)
+        self.assertIn("MEME-CLAIM-" + "a" * 24, body)
+
     def test_image_payload_has_strict_five_mb_limit(self):
         with self.assertRaisesRegex(Exception, "5 MB"):
             validate_image_payload(b"x" * (5 * 1024 * 1024 + 1), "image/png")
+
+
+class DataEditorDataTests(unittest.TestCase):
+    def test_editor_discovers_ordered_dimensions_and_maps_labels(self):
+        dimensions = tag_dimensions({
+            "mood": {"2": "开心", "0": "平静"},
+            "context": {"0": "日常"},
+        })
+        self.assertEqual(dimensions, [
+            ("mood", [(0, "平静"), (2, "开心")]),
+            ("context", [(0, "日常")]),
+        ])
+        self.assertEqual(tags_to_values([2, None], dimensions), [2, None])
+        self.assertEqual(tags_to_values({"mood": "开心"}, dimensions), [2, None])
+        self.assertEqual(values_to_tags([2, None]), [2, None])
+
+    def test_new_dimension_fills_array_and_object_tags_with_null(self):
+        old = tag_dimensions({"mood": {"0": "平静"}})
+        new = tag_dimensions({"mood": {"0": "平静"}, "scene": {}})
+        entries = [
+            {"title": "a", "tags": [0]},
+            {"title": "b", "tags": {"mood": 0}},
+        ]
+        migrate_entry_tags(entries, old, new, fill_new=True)
+        self.assertEqual(entries[0]["tags"], [0, None])
+        self.assertEqual(entries[1]["tags"], {"mood": 0, "scene": None})
+
+    def test_renamed_dimension_preserves_array_and_object_tags(self):
+        old = tag_dimensions({"mood": {"0": "平静"}, "scene": {"0": "日常"}})
+        new = tag_dimensions({"feeling": {"0": "平静"}, "scene": {"0": "日常"}})
+        entries = [
+            {"title": "a", "tags": [0, None]},
+            {"title": "b", "tags": {"mood": 0, "scene": None}},
+        ]
+        migrate_entry_tags(entries, old, new, {"mood": "feeling"})
+        self.assertEqual(entries[0]["tags"], [0, None])
+        self.assertEqual(entries[1]["tags"], {"feeling": 0, "scene": None})
+
+    def test_image_urls_are_normalized_to_compact_form(self):
+        root = Path(__file__).resolve().parents[1]
+        commit = "A" * 40
+        self.assertEqual(
+            normalize_image_url(
+                f"https://github.com/Contributor/NaiLoong/blob/{commit}/assets/memes/a.gif",
+                root,
+            ),
+            f"contributor/{commit.lower()}/assets/memes/a.gif",
+        )
+        self.assertEqual(
+            normalize_image_url(
+                f"https://raw.githubusercontent.com/Contributor/NaiLoong/{commit}/a.png",
+                root,
+            ),
+            f"contributor/{commit.lower()}/a.png",
+        )
+        self.assertEqual(
+            normalize_image_url(f"contributor/{commit}/a.png", root),
+            f"contributor/{commit.lower()}/a.png",
+        )
 
 
 class MemoryGitHub:
@@ -316,6 +412,82 @@ class HashLifecycleTests(unittest.TestCase):
         meme_hash.close_pull_request(github, {"number": 7, "merged": False})
         self.assertNotIn(digest, github.state["reserved"])
         self.assertEqual(meme_hash.pr_duplicate_errors([digest], github.state, set(), 7), [])
+
+    def test_merged_multi_comment_pr_updates_all_issue_comments(self):
+        state, digest_a = self.submission_state()
+        digest_b = "b" * 64
+        state["comments"]["32"] = {
+            "hashes": [digest_b], "status": "processing", "pr_number": 7,
+            "claim_code": "MEME-CLAIM-" + "c" * 24,
+        }
+        state["reserved"][digest_b] = {
+            "pr_number": 7, "comment_id": "32",
+        }
+        state["pull_requests"]["7"] = {
+            "hashes": [digest_a, digest_b],
+            "issue_comment_ids": ["31", "32"],
+        }
+        github = MemoryGitHub(state)
+        meme_hash.close_pull_request(github, {"number": 7, "merged": True})
+        self.assertEqual(github.state["ingested"], [digest_a, digest_b])
+        self.assertEqual(github.state["comments"]["31"]["status"], "ingested")
+        self.assertEqual(github.state["comments"]["32"]["status"], "ingested")
+        self.assertEqual(
+            [call[0] for call in github.calls if call[0] == "minimize"],
+            ["minimize", "minimize"],
+        )
+
+    def test_multi_comment_links_claim_the_union_of_comment_images(self):
+        digest_a = "a" * 64
+        digest_b = "b" * 64
+        state = meme_hash.empty_state()
+        for comment_id, digest in (("31", digest_a), ("32", digest_b)):
+            state["comments"][comment_id] = {
+                "hashes": [digest], "status": "unprocessed", "pr_number": None,
+            }
+            state["reserved"][digest] = {
+                "kind": "issue_comment", "comment_id": comment_id, "pr_number": None,
+            }
+        github = MemoryGitHub(state)
+        body = (
+            "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-31\n"
+            "https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-32"
+        )
+        pull_request = {"number": 8, "base": {"ref": "main"}, "body": body}
+        with patch.object(meme_hash, "new_data_urls", return_value=["one", "two"]), \
+                patch.object(meme_hash, "hash_fork_urls", return_value=[digest_a, digest_b]), \
+                patch.object(meme_hash, "issue_comment_reply"):
+            meme_hash.process_pull_request(github, pull_request)
+        record = github.state["pull_requests"]["8"]
+        self.assertEqual(record["issue_comment_ids"], ["31", "32"])
+        self.assertEqual(github.state["comments"]["31"]["status"], "processing")
+        self.assertEqual(github.state["comments"]["32"]["status"], "processing")
+
+    def test_legacy_claim_code_still_claims_an_existing_comment(self):
+        digest = "a" * 64
+        code = "MEME-CLAIM-" + "d" * 24
+        state = meme_hash.empty_state()
+        state["comments"]["31"] = {
+            "hashes": [digest], "status": "unprocessed", "pr_number": None,
+            "claim_code": code,
+        }
+        state["reserved"][digest] = {
+            "kind": "issue_comment", "comment_id": "31", "pr_number": None,
+        }
+        github = MemoryGitHub(state)
+        with patch.object(meme_hash, "new_data_urls", return_value=["one"]), \
+                patch.object(meme_hash, "hash_fork_urls", return_value=[digest]), \
+                patch.object(meme_hash, "issue_comment_reply"):
+            meme_hash.process_pull_request(
+                github,
+                {
+                    "number": 9,
+                    "base": {"ref": "main"},
+                    "body": code,
+                },
+            )
+        self.assertEqual(github.state["pull_requests"]["9"]["issue_comment_ids"], ["31"])
+        self.assertEqual(github.state["comments"]["31"]["status"], "processing")
 
     def test_removed_comment_images_release_previous_hash_even_without_status_block(self):
         state, digest = self.submission_state()

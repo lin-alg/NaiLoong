@@ -50,6 +50,7 @@
 - `.github/workflows/`：PR 测试/数据校验和 GitHub Pages 部署。
 - `scripts/validate_data.py`：数据契约、标签语义、图片 URL 格式和重复 URL 校验。
 - `scripts/meme_hash.py`：Issue 评论图片和 PR 图片的哈希缓存、状态联动及每日归档逻辑。
+- `scripts/data_editor.py`：从 manifest 和 tags.json 自动发现数据结构的本地 Tkinter 编辑器。
 - `scripts/generate_previews.py`：合并 PR 后下载新增原图并生成预览 WebP。
 - `tests/`：数据校验器、标签解析、图片 URL 转换和 Markdown 渲染测试；Python 测试使用标准库，Node 测试使用内置断言，不引入第三方依赖。
 - `docs/`：按参与方式区分的贡献指南。
@@ -68,6 +69,8 @@
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
 - 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存。预占位代表仍有效的待处理图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`。待处理评论换图或清空时回收旧占位；未合并关闭 PR 时保留 Issue 投稿占位并解除认领，纯 PR 占位释放供重新检查。
 - 单张投稿图片严格小于或等于 5 MB；鼓励压到 2 MB 以下。数据校验器本身不下载 Fork 图片；`meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件来执行 5 MB 检查。
+- 投稿认领优先使用 Issue 评论完整链接 `https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-<id>`；一个 PR 可以包含多条链接，PR 图片必须覆盖所有被认领评论的全部图片。已存在的 `MEME-CLAIM-...` 口令仍需兼容。
+- 数据编辑器允许新增、修改和删除角色与分类；标签管理仅允许重命名标签维度、修改该维度的中英文翻译和新增标签维度，不提供删除标签或修改标签值的操作。新增标签维度时，编辑器会为该角色所有分类中的已有条目补入 `null`；这些限制只属于编辑器界面，不在校验器层面做硬性约束。
 - 修改维度顺序或已有维度内标签序号时，同步核查并迁移受影响条目。数组标签从来不表示展平序号；不得重新引入展平解释。
 - 修改数据规则时同步更新校验器、测试、项目开发指南的数据规范和相关投稿指南。
 

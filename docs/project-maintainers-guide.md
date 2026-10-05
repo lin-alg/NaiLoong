@@ -16,7 +16,8 @@
 | 表情记录与标签定义 | `data/<role-id>/` |
 | 标签维度的中英文显示名 | `data/tag-translations.json` |
 | 数据格式校验 | `scripts/validate_data.py` |
-| 图片去重和投稿状态 | `scripts/meme_hash.py` |
+| 图片去重、投稿状态和评论认领 | `scripts/meme_hash.py` |
+| 本地数据图形化编辑器 | `scripts/data_editor.py` |
 | 预览图生成 | `scripts/generate_previews.py` |
 | 自动化测试和工作流 | `tests/`、`.github/workflows/` |
 | 贡献文档和提交模板 | `docs/`、`CONTRIBUTING.md`、`.github/ISSUE_TEMPLATE/`、`.github/pull_request_template.md` |
@@ -41,7 +42,7 @@ node tests/ghimg.test.js
 node tests/md.test.js
 ```
 
-数据、脚本或页面逻辑改动请运行相关检查；只改文档时，检查链接、示例和操作顺序即可。上述检查使用 Python 标准库和 Node 内置断言，不请求网络。
+数据、脚本或页面逻辑改动请运行相关检查；只改文档时，检查链接、示例和操作顺序即可。上述检查使用 Python 标准库和 Node 内置断言，不请求网络。数据投稿者还可以运行 `python scripts/data_editor.py data` 打开本地编辑器；它使用 Python 自带 Tkinter，不需要安装第三方包。编辑器会从 manifest 和各角色的 tags.json 自动发现结构，支持角色、分类的管理，以及标签维度的新增、重命名和中英文翻译修改；标签删除和值序号修改不在编辑器中提供。
 
 ## 数据如何变成页面
 
@@ -145,11 +146,11 @@ https://raw.githubusercontent.com/<owner>/NaiLoong/<commit>/assets/memes/laugh.p
 | `generate-previews.yml`（Generate Meme Previews） | 合并到 `main` 的 PR | 为新增或替换的图片生成 WebP，写入主仓库 `preview` 分支。 |
 | `deploy.yml` | `main` 更新或手动运行 | 四条检查全部通过后发布 GitHub Pages。 |
 
-`validate_data.py` 只检查 URL 结构和数据中的重复 URL，不下载图片。图片下载、体积检查和内容去重由独立的哈希工作流执行。哈希工作流和预览图工作流使用主仓库脚本，不执行 PR 分支代码。
+`validate_data.py` 只检查 URL 结构和数据中的重复 URL，不下载图片。图片下载、体积检查和内容去重由独立的哈希工作流执行。哈希工作流和预览图工作流使用主仓库脚本，不执行 PR 分支代码。`data_editor.py` 只使用 Python 标准库和 Tkinter，保存记录前会调用同一套 `validate_data()`。
 
 `hash.txt` 每行保存一个已归档的 SHA-256。尚未归档的已入库哈希和待处理图片哈希保存在 Actions Cache；这些状态由工作流维护。
 
-PR 图片检查读取事件中的固定 head commit，文件读取或解析失败会使检查失败。未合并关闭 PR 会解除认领：Issue 原投稿恢复为待处理；纯 PR 图片的占位释放，重新打开后再检查。待处理评论换图或清空图片会回收旧占位，临时下载失败则保留原占位等待重试。
+PR 图片检查读取事件中的固定 head commit，文件读取或解析失败会使检查失败。PR 描述可以使用投稿评论的完整 GitHub 链接，一次认领多条评论；旧缓存和旧 PR 仍兼容 `MEME-CLAIM-...` 口令。使用链接时，PR 新增图片的哈希必须恰好等于所有被认领评论图片哈希的并集。未合并关闭 PR 会解除所有评论认领：Issue 原投稿恢复为待处理；纯 PR 图片，不在评论区的占位释放，重新打开PR后再检查。待处理评论换图或清空图片会回收旧占位，临时下载失败则保留原占位等待重试。
 
 Issue 投稿入库后，机器人将 Markdown 图片改成普通原图链接（HTML 图片也转成链接），然后按“已解决”折叠评论，保留说明和附件地址。归档操作可以通过重新运行对应合并事件重试，不删除评论。
 
