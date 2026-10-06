@@ -8,6 +8,7 @@ import copy
 import datetime
 import hashlib
 import html
+import http.client
 import json
 import os
 import re
@@ -33,6 +34,8 @@ STATE_PATH = ".cache/meme-hash/state.json"
 ISSUE_NUMBER = 1
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_COMMENT_IMAGES = 5
+MAX_DOWNLOAD_RETRIES = 4
+DOWNLOAD_RETRY_BASE_SECONDS = 1
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 CLAIM_PATTERN = re.compile(r"\bMEME-CLAIM-[0-9a-f]{24}\b")
 COMMENT_LINK_PATTERN = re.compile(
@@ -526,22 +529,36 @@ def fetch_image_bytes(url: str, attachment=False) -> bytes:
 
     headers = {"User-Agent": "NaiLoong-meme-hash-bot", "Accept": "image/*"}
     request = Request(url, headers=headers)
-    try:
-        with urlopen(request, timeout=25) as response:
-            final = urlsplit(response.geturl())
-            final_host = (final.hostname or "").lower()
-            allowed = ATTACHMENT_HOSTS if attachment else {"raw.githubusercontent.com", "objects.githubusercontent.com"}
-            if final.scheme != "https" or final_host not in allowed:
-                raise BotError("GitHub image request redirected to an unsupported host")
-            content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > MAX_IMAGE_BYTES:
-                raise ImageTooLargeError("Image exceeds the 5 MB limit")
-            data = response.read(MAX_IMAGE_BYTES + 1)
-            content_type = response.headers.get("Content-Type", "")
-    except (HTTPError, URLError, TimeoutError) as exc:
-        raise BotError(f"Could not download image from {url}: {exc}") from exc
-    validate_image_payload(data, content_type)
-    return data
+    max_attempts = MAX_DOWNLOAD_RETRIES + 1
+    for attempt in range(1, max_attempts + 1):
+        try:
+            with urlopen(request, timeout=25) as response:
+                final = urlsplit(response.geturl())
+                final_host = (final.hostname or "").lower()
+                allowed = ATTACHMENT_HOSTS if attachment else {
+                    "raw.githubusercontent.com", "objects.githubusercontent.com"
+                }
+                if final.scheme != "https" or final_host not in allowed:
+                    raise BotError("GitHub image request redirected to an unsupported host")
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > MAX_IMAGE_BYTES:
+                    raise ImageTooLargeError("Image exceeds the 5 MB limit")
+                data = response.read(MAX_IMAGE_BYTES + 1)
+                content_type = response.headers.get("Content-Type", "")
+            validate_image_payload(data, content_type)
+            return data
+        except (ImageTooLargeError, BotError):
+            raise
+        except (HTTPError, URLError, TimeoutError, OSError, http.client.HTTPException) as exc:
+            retryable = not isinstance(exc, HTTPError) or exc.code in {408, 425, 429} or exc.code >= 500
+            if not retryable or attempt == max_attempts:
+                raise BotError(f"Could not download image from {url}: {exc}") from exc
+            print(
+                f"::warning::Image download from {host} failed (attempt {attempt}/"
+                f"{max_attempts}); retrying ({attempt}/{MAX_DOWNLOAD_RETRIES}): {exc}"
+            )
+            time.sleep(DOWNLOAD_RETRY_BASE_SECONDS * (2 ** (attempt - 1)))
+    raise BotError(f"Could not download image from {url}")
 
 
 def hash_attachment_urls(urls):
@@ -716,9 +733,40 @@ def release_pr_reservations(state, number, hashes=None):
         if hashes is not None and digest not in hashes:
             continue
         if reservation.get("comment_id"):
-            reservation["pr_number"] = None
+            if str(reservation["comment_id"]) in state["comments"]:
+                reservation["pr_number"] = None
+            else:
+                state["reserved"].pop(digest)
         else:
             state["reserved"].pop(digest)
+
+
+def reset_issue_comment_after_pr(state, comment_id):
+    comment_key = str(comment_id)
+    record = state["comments"].get(comment_key)
+    if not record:
+        return
+    if record.get("deleted"):
+        release_comment_reservations(state, comment_key)
+        state["comments"].pop(comment_key, None)
+        return
+    record["status"] = "unprocessed"
+    record["pr_number"] = None
+
+
+def handle_deleted_issue_comment(github: GitHub, comment_id):
+    comment_id = str(comment_id)
+
+    def update(state):
+        record = state["comments"].get(comment_id)
+        if record and record.get("status") == "processing" and record.get("pr_number"):
+            # Keep the reservation while the already-open PR is under review.
+            record["deleted"] = True
+            return
+        release_comment_reservations(state, comment_id)
+        state["comments"].pop(comment_id, None)
+
+    github.mutate_state(update)
 
 
 def handle_issue_comment(github: GitHub, event):
@@ -729,6 +777,11 @@ def handle_issue_comment(github: GitHub, event):
     if (comment.get("user") or {}).get("type") == "Bot":
         return
     if event.get("action") == "edited" and (event.get("sender") or {}).get("type") == "Bot":
+        return
+    if event.get("action") == "deleted":
+        if comment.get("id") is None:
+            raise BotError("Deleted issue comment event is missing the comment ID")
+        handle_deleted_issue_comment(github, comment["id"])
         return
 
     full_comment = github.get_issue_comment(comment["id"])
@@ -970,8 +1023,7 @@ def process_pull_request(github: GitHub, pull_request):
             for previous_comment_id in previous_comment_ids:
                 old_comment = state["comments"].get(str(previous_comment_id))
                 if old_comment and old_comment.get("pr_number") == number:
-                    old_comment["pr_number"] = None
-                    old_comment["status"] = "unprocessed"
+                    reset_issue_comment_after_pr(state, previous_comment_id)
             state["pull_requests"].pop(pr_key, None)
 
         if previous_comment_ids and not (claim_code or unique_claim_links):
@@ -1036,8 +1088,7 @@ def process_pull_request(github: GitHub, pull_request):
                 continue
             old_comment = state["comments"].get(previous_comment_id)
             if old_comment and old_comment.get("pr_number") == number:
-                old_comment["status"] = "unprocessed"
-                old_comment["pr_number"] = None
+                reset_issue_comment_after_pr(state, previous_comment_id)
 
         for digest in current_hashes:
             reservation = state["reserved"].get(digest)
@@ -1131,8 +1182,14 @@ def close_pull_request(github: GitHub, pull_request):
             if str(comment_id) not in state["comments"]:
                 continue
             issue_record = state["comments"][str(comment_id)]
-            issue_record["status"] = "ingested" if merged else "unprocessed"
-            issue_record["pr_number"] = number if merged else None
+            if merged:
+                if issue_record.get("deleted"):
+                    state["comments"].pop(str(comment_id), None)
+                else:
+                    issue_record["status"] = "ingested"
+                    issue_record["pr_number"] = number
+            else:
+                reset_issue_comment_after_pr(state, comment_id)
         state["pull_requests"].pop(pr_key, None)
         result.update(found=True, comment_ids=comment_ids, hashes=sorted(hashes))
 
@@ -1160,8 +1217,7 @@ def release_pull_request_state(github: GitHub, number: int):
         for comment_id in result.get("comment_ids", []):
             comment = state["comments"].get(str(comment_id))
             if comment:
-                comment["status"] = "unprocessed"
-                comment["pr_number"] = None
+                reset_issue_comment_after_pr(state, comment_id)
 
     github.mutate_state(update)
     return result.get("comment_ids", [])
@@ -1208,6 +1264,9 @@ def archive_ingested_hashes(github: GitHub):
         if remaining == set(state["ingested"]):
             return None
         state["ingested"] = sorted(remaining)
+        for comment in state["comments"].values():
+            if comment.get("status") == "ingested":
+                comment.pop("hashes", None)
         return True
 
     github.mutate_state(clear_archived)

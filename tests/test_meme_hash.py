@@ -235,6 +235,35 @@ class MemeHashTests(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "5 MB"):
             validate_image_payload(b"x" * (5 * 1024 * 1024 + 1), "image/png")
 
+    def test_image_download_retries_transient_network_errors(self):
+        response = Mock()
+        response.geturl.return_value = "https://raw.githubusercontent.com/contributor/NaiLoong/image/test.png"
+        response.headers = {"Content-Type": "image/png"}
+        response.read.return_value = b"\x89PNG\r\n\x1a\n"
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        with patch.object(
+            meme_hash,
+            "urlopen",
+            side_effect=[meme_hash.URLError("temporary"), meme_hash.URLError("temporary"), response],
+        ) as download, patch.object(meme_hash.time, "sleep") as sleep:
+            result = meme_hash.fetch_image_bytes(response.geturl())
+        self.assertEqual(result, b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(download.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2])
+
+    def test_image_download_does_not_retry_not_found(self):
+        missing = meme_hash.HTTPError(
+            "https://raw.githubusercontent.com/a/b/c", 404, "Not Found", {}, None
+        )
+        with patch.object(meme_hash, "urlopen", side_effect=missing) as download, patch.object(
+            meme_hash.time, "sleep"
+        ) as sleep:
+            with self.assertRaisesRegex(meme_hash.BotError, "404"):
+                meme_hash.fetch_image_bytes("https://raw.githubusercontent.com/a/b/c")
+        download.assert_called_once()
+        sleep.assert_not_called()
+
 
 class DataEditorDataTests(unittest.TestCase):
     def test_editor_discovers_ordered_dimensions_and_maps_labels(self):
@@ -405,6 +434,73 @@ class HashLifecycleTests(unittest.TestCase):
         self.assertIsNone(github.state["reserved"][digest]["pr_number"])
         self.assertEqual(github.state["comments"]["31"]["status"], "unprocessed")
         self.assertEqual(meme_hash.pr_duplicate_errors([digest], github.state, set(), 8, "31"), [])
+
+    def test_deleted_unclaimed_comment_releases_hash_reservation(self):
+        state, digest = self.submission_state()
+        state["pull_requests"].clear()
+        state["comments"]["31"].update(status="unprocessed", pr_number=None)
+        state["reserved"][digest]["pr_number"] = None
+        github = MemoryGitHub(state)
+        meme_hash.handle_event(github, "issue_comment", {
+            "action": "deleted",
+            "issue": {"number": 1},
+            "comment": {"id": 31, "user": {"type": "User"}},
+        })
+        self.assertNotIn("31", github.state["comments"])
+        self.assertNotIn(digest, github.state["reserved"])
+
+    def test_deleted_claimed_comment_keeps_hash_reserved_until_pr_closes(self):
+        state, digest = self.submission_state()
+        github = MemoryGitHub(state)
+        meme_hash.handle_deleted_issue_comment(github, 31)
+        self.assertTrue(github.state["comments"]["31"]["deleted"])
+        self.assertEqual(github.state["reserved"][digest]["pr_number"], 7)
+
+        meme_hash.close_pull_request(github, {"number": 7, "merged": False})
+        self.assertNotIn("31", github.state["comments"])
+        self.assertNotIn(digest, github.state["reserved"])
+
+    def test_deleted_claimed_comment_is_archived_when_pr_merges(self):
+        state, digest = self.submission_state()
+        github = MemoryGitHub(state)
+        meme_hash.handle_deleted_issue_comment(github, 31)
+        meme_hash.close_pull_request(github, {"number": 7, "merged": True})
+        self.assertEqual(github.state["ingested"], [digest])
+        self.assertNotIn("31", github.state["comments"])
+        self.assertNotIn(digest, github.state["reserved"])
+
+    def test_archive_clears_ingested_hashes_only_after_hash_file_is_written(self):
+        digest = "d" * 64
+
+        class ArchiveGitHub(MemoryGitHub):
+            def __init__(self, fail_write=False):
+                super().__init__()
+                self.state["ingested"] = [digest]
+                self.state["comments"]["31"] = {
+                    "hashes": [digest], "status": "ingested", "pr_number": 7,
+                }
+                self.hash_file = ""
+                self.fail_write = fail_write
+
+            def read_contents(self, path, ref):
+                return self.hash_file, "blob-sha"
+
+            def write_contents(self, path, branch, text, message, sha=None):
+                if self.fail_write:
+                    raise meme_hash.GitHubAPIError(500, "write failed")
+                self.hash_file = text
+
+        github = ArchiveGitHub()
+        meme_hash.archive_ingested_hashes(github)
+        self.assertEqual(github.hash_file, digest + "\n")
+        self.assertEqual(github.state["ingested"], [])
+        self.assertNotIn("hashes", github.state["comments"]["31"])
+
+        failed = ArchiveGitHub(fail_write=True)
+        with self.assertRaises(meme_hash.GitHubAPIError):
+            meme_hash.archive_ingested_hashes(failed)
+        self.assertEqual(failed.state["ingested"], [digest])
+        self.assertEqual(failed.state["comments"]["31"]["hashes"], [digest])
 
     def test_unmerged_direct_pr_releases_reservation(self):
         state, digest = self.submission_state(issue=False)

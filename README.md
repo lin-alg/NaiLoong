@@ -5,6 +5,7 @@
 [![Data Linter](https://img.shields.io/badge/CI-Data%20Linter-blue?logo=github)](https://github.com/lin-alg/NaiLoong/actions/workflows/pr-check.yml)
 [![Static Site](https://img.shields.io/badge/Static-SPA%20%2B%20zero%20build-8dd6ff?logo=github)](./index.html)
 [![Repo Size](https://img.shields.io/github/repo-size/lin-alg/NaiLoong?color=blue)](https://github.com/lin-alg/NaiLoong)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/lin-alg/NaiLoong)
 
 奶-hub 是一个奶科生物表情包网站，旨在帮助新手入门 GitHub 的使用。
 

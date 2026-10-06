@@ -2,7 +2,7 @@ name: Meme Image Hash Check
 
 on:
   issue_comment:
-    types: [created, edited]
+    types: [created, edited, deleted]
   pull_request_target:
     types: [opened, reopened, synchronize, edited, ready_for_review, closed]
   schedule:
@@ -60,6 +60,7 @@ jobs:
             meme-hash-state-
 
       - name: Initialize hash cache
+        id: init-cache
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/meme_hash.py init-cache
@@ -71,14 +72,16 @@ jobs:
 
       - name: Save latest hash cache
         id: cache-save
-        if: always()
+        if: >-
+          always() && steps.cache-restore.outcome == 'success' &&
+          steps.init-cache.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: .cache/meme-hash
           key: ${{ steps.cache-key.outputs.key }}
 
       - name: Delete previous hash cache
-        if: always() && steps.cache-save.outcome == 'success'
+        if: success() && steps.cache-save.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MEME_HASH_CACHE_KEY: ${{ steps.cache-key.outputs.key }}
@@ -119,6 +122,7 @@ jobs:
             meme-hash-state-
 
       - name: Initialize hash cache
+        id: init-cache
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/meme_hash.py init-cache
@@ -130,14 +134,16 @@ jobs:
 
       - name: Save latest hash cache
         id: cache-save
-        if: always()
+        if: >-
+          always() && steps.cache-restore.outcome == 'success' &&
+          steps.init-cache.outcome == 'success'
         uses: actions/cache/save@v4
         with:
           path: .cache/meme-hash
           key: ${{ steps.cache-key.outputs.key }}
 
       - name: Delete previous hash cache
-        if: always() && steps.cache-save.outcome == 'success'
+        if: success() && steps.cache-save.outcome == 'success'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MEME_HASH_CACHE_KEY: ${{ steps.cache-key.outputs.key }}
