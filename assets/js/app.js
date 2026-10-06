@@ -27,9 +27,18 @@
   const cache = new Map();
   const context = { url: "", title: "", anchor: null };
   let eggAudio = null;
+  let eggAudioSrc = "";
 
   const EASTER_EGG = {
-    src: "assets/audio/nailong_laugh.mp3",
+    defaultSrc: "assets/audio/nailong_laugh.mp3",
+    naiwaSources: [
+      "assets/audio/nailong_laugh.mp3",
+      "assets/audio/hola_ganbadie.mp3",
+      "assets/audio/gajiaosai.mp3",
+      "assets/audio/gagadilashui.mp3",
+      "assets/audio/dupu.mp3"
+    ],
+    naidanSrc: "assets/audio/andi.mp3",
     chance: 0.25,
     volume: 0.7
   };
@@ -1009,22 +1018,45 @@
     });
   }
 
-  function primeEasterEgg() {
+  function easterEggSource() {
+    if (state.charId === "naidan") return EASTER_EGG.naidanSrc;
+    if (state.charId === "naiwa") {
+      const sources = EASTER_EGG.naiwaSources;
+      return sources[Math.floor(Math.random() * sources.length)];
+    }
+    return EASTER_EGG.defaultSrc;
+  }
+
+  function primeEasterEgg(src) {
     if (eggAudio || typeof Audio !== "function") return;
     try {
-      eggAudio = new Audio(EASTER_EGG.src);
+      eggAudio = new Audio(src || EASTER_EGG.defaultSrc);
+      eggAudioSrc = src || EASTER_EGG.defaultSrc;
       eggAudio.preload = "auto";
       eggAudio.volume = EASTER_EGG.volume;
       // 提前缓冲，首次触发听不出加载延迟。
       eggAudio.load();
     } catch (err) {
       eggAudio = null;
+      eggAudioSrc = "";
     }
   }
 
   // 彩蛋：不弹提示、不打断操作，播放失败也保持静默。
   function playEasterEgg() {
-    primeEasterEgg();
+    const src = easterEggSource();
+    if (eggAudioSrc !== src) {
+      if (eggAudio) {
+        try {
+          eggAudio.pause();
+          eggAudio.src = "";
+        } catch (err) {
+        }
+      }
+      eggAudio = null;
+      eggAudioSrc = "";
+    }
+    primeEasterEgg(src);
     if (!eggAudio) return;
     try {
       eggAudio.currentTime = 0;
