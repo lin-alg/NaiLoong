@@ -83,6 +83,11 @@ assert.ok(html.includes('href="#二-安装-git-并创建-fork"'));
 html = MD.render("打开 <http://localhost:8080> 预览");
 assert.ok(html.includes('<a href="http://localhost:8080" target="_blank" rel="noopener noreferrer">http://localhost:8080</a>'));
 
+html = MD.render("[危险](javascript:alert(1))\n\n![危险](JaVaScRiPt:alert(1))");
+assert.ok(html.includes('<a href="#">危险</a>'));
+assert.ok(html.includes('<img src="about:blank" alt="危险"'));
+assert.ok(!html.includes("javascript:"));
+
 // 分割线
 html = MD.render("上文\n\n---\n\n下文");
 assert.ok(html.includes("<hr>"));

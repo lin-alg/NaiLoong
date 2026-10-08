@@ -51,6 +51,11 @@
     return out.join("/");
   }
 
+  function hasUnsafeScheme(value) {
+    return /^[a-z][a-z0-9+.-]*:/i.test(String(value).trim()) &&
+      !/^(?:https?:|mailto:)/i.test(String(value).trim());
+  }
+
   // options: { base, resolveDoc, repoUrl }
   //   base: 文档所在目录（如 "docs/"），用于解析相对图片和链接
   //   resolveDoc: (path) => docId | null，把仓库内 md 路径映射为站内文档路由
@@ -62,12 +67,14 @@
     const repoUrl = opts.repoUrl || "";
 
     function imageSrc(src) {
+      if (hasUnsafeScheme(src)) return "about:blank";
       if (/^(?:[a-z][a-z0-9+.-]*:|\/)/i.test(src)) return src;
       return joinPath(base, src);
     }
 
     function linkTarget(href) {
       if (href.charAt(0) === "#") return { href: href };
+      if (hasUnsafeScheme(href)) return { href: "#" };
       if (/^(?:https?:|mailto:)/i.test(href)) return { href: href, external: true };
       const hashAt = href.indexOf("#");
       const path = hashAt === -1 ? href : href.slice(0, hashAt);
