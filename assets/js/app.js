@@ -5,12 +5,17 @@
     repo: "https://github.com/lin-alg/NaiLoong",
     dataBase: "data/",
     tagDimensions: "data/tag-translations.json",
-    fallback: "assets/placeholders/fallback.gif"
+    fallback: "assets/placeholders/fallback.gif",
+    uploadUrl: "https://wplace-gallery.linalg.tech/api/images/upload"
   };
 
   const PAGE_SIZES = [4, 8, 16, 32, 64];
   const DEFAULT_PAGE_SIZE = 8;
   const STAGGER_CAP = 14;
+  const MAX_UPLOAD_FILES = 10;
+  const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+  const UPLOAD_TYPES = new Set(["image/jpeg", "image/png", "image/gif"]);
+  const UPLOAD_EXTENSIONS = /\.(?:jpe?g|png|gif)$/i;
 
   const el = {};
   const state = {
@@ -23,6 +28,10 @@
     selected: new Map(),
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE
+  };
+  const uploadState = {
+    entries: [],
+    uploading: false
   };
   const cache = new Map();
   const context = { url: "", title: "", anchor: null };
@@ -111,6 +120,170 @@
       node.target = "_blank";
       node.rel = "noopener noreferrer";
     });
+  }
+
+  function uploadFileError(file) {
+    if (!UPLOAD_EXTENSIONS.test(file.name) || (file.type && !UPLOAD_TYPES.has(file.type))) {
+      return "仅支持 JPG、PNG 或 GIF 图片";
+    }
+    if (!file.size) return "文件为空，请重新选择";
+    if (file.size > MAX_UPLOAD_BYTES) return "图片超过 5 MB，请压缩后重新选择";
+    return "";
+  }
+
+  function releaseUploadFiles() {
+    uploadState.entries.forEach((entry) => {
+      if (entry.preview) URL.revokeObjectURL(entry.preview);
+    });
+    uploadState.entries = [];
+  }
+
+  function renderUploadList() {
+    const labels = { pending: "等待上传", uploading: "上传中", success: "上传成功", error: "上传失败", invalid: "无法上传" };
+    el.uploadList.innerHTML = uploadState.entries.map((entry, index) => {
+      const file = entry.file;
+      const size = file.size < 1024 * 1024
+        ? Math.max(1, Math.round(file.size / 1024)) + " KB"
+        : (file.size / (1024 * 1024)).toFixed(1) + " MB";
+      return '<li class="upload-item" data-status="' + entry.status + '">' +
+        (entry.preview ? '<img class="upload-thumbnail" src="' + esc(entry.preview) + '" alt="">' : '<span class="upload-thumbnail"></span>') +
+        '<div class="upload-item-info"><span class="upload-item-name">' + esc(file.name) + '</span>' +
+        '<span class="upload-item-size">' + size + '</span>' +
+        (entry.message ? '<p class="upload-item-message">' + esc(entry.message) + '</p>' : '') + '</div>' +
+        '<span class="upload-item-status">' + (entry.status === "uploading" ? '<span class="upload-spinner" aria-hidden="true"></span>' : '') +
+        labels[entry.status] + '</span>' +
+        '<button class="btn btn-ghost icon-btn upload-remove" type="button" data-upload-remove="' + index + '" aria-label="移除 ' + esc(file.name) + '" title="移除图片"' +
+        (uploadState.uploading ? ' disabled' : '') + '>' + el.uploadDialogClose.innerHTML + '</button></li>';
+    }).join("");
+    const entries = uploadState.entries;
+    const invalid = entries.some((entry) => entry.status === "invalid");
+    const remaining = entries.filter((entry) => entry.status !== "success");
+    el.uploadSubmit.disabled = uploadState.uploading || !remaining.length || invalid;
+    el.uploadSubmit.textContent = entries.some((entry) => entry.status === "error") ? "重试失败图片" : "开始上传";
+    el.uploadSelection.classList.toggle("is-error", invalid);
+    el.uploadSelection.textContent = entries.length
+      ? "已选择 " + entries.length + " / " + MAX_UPLOAD_FILES + " 张" + (invalid ? "，请移除不符合要求的图片。" : "")
+      : "尚未选择图片";
+  }
+
+  function setUploadProgress(percent, processed, total, message) {
+    const value = Math.max(0, Math.min(100, Math.round(percent)));
+    el.uploadProgressBar.style.width = value + "%";
+    el.uploadProgressTrack.setAttribute("aria-valuenow", String(value));
+    el.uploadProgressCount.textContent = processed + " / " + total;
+    el.uploadProgressStatus.textContent = message;
+  }
+
+  function selectUploadFiles() {
+    if (uploadState.uploading) return;
+    const files = Array.from(el.uploadInput.files || []);
+    el.uploadInput.value = "";
+    if (!files.length) return;
+    if (files.length > MAX_UPLOAD_FILES) {
+      el.uploadSelection.textContent = "每次最多选择 10 张图片，请重新选择。";
+      el.uploadSelection.classList.add("is-error");
+      el.uploadSubmit.disabled = true;
+      return;
+    }
+    releaseUploadFiles();
+    uploadState.entries = files.map((file) => {
+      const error = uploadFileError(file);
+      return { file, status: error ? "invalid" : "pending", message: error, preview: error ? "" : URL.createObjectURL(file) };
+    });
+    el.uploadCancel.textContent = "取消";
+    renderUploadList();
+    setUploadProgress(0, 0, files.length, "等待上传");
+  }
+
+  function uploadOne(entry, onProgress) {
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", CONFIG.uploadUrl);
+      request.timeout = 120000;
+      request.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable && event.total) onProgress(event.loaded / event.total);
+      });
+      request.addEventListener("load", () => {
+        let payload;
+        try {
+          payload = JSON.parse(request.responseText);
+        } catch (error) {
+          reject(new Error("服务器返回异常，请稍后重试。"));
+          return;
+        }
+        if (request.status < 200 || request.status >= 300 || !payload || payload.success !== true) {
+          reject(new Error(payload && payload.error ? payload.error : "上传失败（HTTP " + request.status + "）。"));
+          return;
+        }
+        resolve(payload);
+      });
+      request.addEventListener("error", () => reject(new Error("无法连接上传服务，请检查网络或稍后重试。")));
+      request.addEventListener("timeout", () => reject(new Error("上传超时，请稍后重试。")));
+      const formData = new FormData();
+      formData.append("file", entry.file, entry.file.name);
+      request.send(formData);
+    });
+  }
+
+  async function startUpload() {
+    const entries = uploadState.entries;
+    if (uploadState.uploading || !entries.length || entries.some((entry) => entry.status === "invalid")) return;
+    const pending = entries.filter((entry) => entry.status !== "success");
+    if (!pending.length) return;
+    uploadState.uploading = true;
+    [el.uploadInput, el.uploadChoose, el.uploadCancel, el.uploadDialogClose].forEach((node) => { node.disabled = true; });
+    el.uploadDialog.setAttribute("aria-busy", "true");
+    let processed = entries.length - pending.length;
+    try {
+      for (const entry of pending) {
+        entry.status = "uploading";
+        entry.message = "";
+        renderUploadList();
+        setUploadProgress(processed / entries.length * 100, processed, entries.length, "正在上传：" + entry.file.name);
+        try {
+          await uploadOne(entry, (fraction) => {
+            setUploadProgress((processed + fraction) / entries.length * 100, processed, entries.length,
+              (fraction === 1 ? "正在保存：" : "正在上传：") + entry.file.name);
+          });
+          entry.status = "success";
+        } catch (error) {
+          entry.status = "error";
+          entry.message = error.message || "上传失败，请稍后重试。";
+        }
+        processed += 1;
+        renderUploadList();
+        setUploadProgress(processed / entries.length * 100, processed, entries.length, "已处理 " + processed + " 张");
+      }
+    } finally {
+      uploadState.uploading = false;
+      [el.uploadInput, el.uploadChoose, el.uploadCancel, el.uploadDialogClose].forEach((node) => { node.disabled = false; });
+      el.uploadDialog.setAttribute("aria-busy", "false");
+      renderUploadList();
+    }
+    const failed = entries.filter((entry) => entry.status === "error").length;
+    setUploadProgress(100, entries.length, entries.length, failed
+      ? "成功 " + (entries.length - failed) + " 张，失败 " + failed + " 张"
+      : "全部 " + entries.length + " 张图片上传成功");
+    el.uploadCancel.textContent = "关闭";
+  }
+
+  function closeUploadDialog() {
+    if (!uploadState.uploading) el.uploadDialog.close();
+  }
+
+  function openUploadDialog() {
+    closeContextMenu(false);
+    setMobileMenu(false);
+    if (el.uploadDialog.open) return;
+    if (typeof el.uploadDialog.showModal === "function") el.uploadDialog.showModal();
+    else el.uploadDialog.setAttribute("open", "");
+  }
+
+  function setMobileMenu(open) {
+    el.mobileNav.hidden = !open;
+    el.mobileMenuToggle.setAttribute("aria-expanded", String(open));
+    el.mobileMenuToggle.setAttribute("aria-label", open ? "关闭菜单" : "打开菜单");
+    el.mobileMenuToggle.title = open ? "关闭菜单" : "打开菜单";
   }
 
   function charDir(meta) {
@@ -1069,6 +1242,49 @@
   function bindEvents() {
     window.addEventListener("hashchange", applyRoute);
 
+    document.querySelectorAll("[data-upload-trigger]").forEach((button) => {
+      button.addEventListener("click", openUploadDialog);
+    });
+    el.uploadChoose.addEventListener("click", () => el.uploadInput.click());
+    el.uploadInput.addEventListener("change", selectUploadFiles);
+    el.uploadSubmit.addEventListener("click", startUpload);
+    el.uploadCancel.addEventListener("click", closeUploadDialog);
+    el.uploadDialogClose.addEventListener("click", closeUploadDialog);
+    el.uploadDialog.addEventListener("cancel", (event) => {
+      if (uploadState.uploading) event.preventDefault();
+    });
+    el.uploadDialog.addEventListener("click", (event) => {
+      if (event.target !== el.uploadDialog) return;
+      const rect = el.uploadDialog.getBoundingClientRect();
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) closeUploadDialog();
+    });
+    el.uploadList.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-upload-remove]");
+      if (!button || uploadState.uploading) return;
+      const index = Number(button.dataset.uploadRemove);
+      const entry = uploadState.entries[index];
+      if (entry.preview) URL.revokeObjectURL(entry.preview);
+      uploadState.entries.splice(index, 1);
+      renderUploadList();
+      setUploadProgress(0, 0, uploadState.entries.length, "等待上传");
+    });
+    el.uploadDialog.addEventListener("close", () => {
+      releaseUploadFiles();
+      el.uploadInput.value = "";
+      el.uploadCancel.textContent = "取消";
+      renderUploadList();
+      setUploadProgress(0, 0, 0, "等待选择图片");
+    });
+
+    el.mobileMenuToggle.addEventListener("click", () => setMobileMenu(el.mobileNav.hidden));
+    el.mobileNav.addEventListener("click", (event) => {
+      if (event.target.closest("a")) setMobileMenu(false);
+    });
+    document.addEventListener("pointerdown", (event) => {
+      if (!el.mobileNav.hidden && !el.mobileNav.contains(event.target) && !el.mobileMenuToggle.contains(event.target)) setMobileMenu(false);
+    });
+    window.matchMedia("(max-width: 1011px)").addEventListener("change", () => setMobileMenu(false));
+
     el.subTabs.addEventListener("click", (event) => {
       const btn = event.target.closest(".tab");
       if (!btn) return;
@@ -1257,6 +1473,11 @@
     el.randomBtn.addEventListener("click", randomMeme);
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !el.mobileNav.hidden) {
+        setMobileMenu(false);
+        focusQuietly(el.mobileMenuToggle);
+      }
+      if (el.uploadDialog.open || el.imageDialog.open) return;
       const tag = document.activeElement && document.activeElement.tagName;
       if (event.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
         event.preventDefault();
@@ -1286,6 +1507,20 @@
     el.toast = $("toast");
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
+    el.mobileMenuToggle = $("mobileMenuToggle");
+    el.mobileNav = $("mobileNav");
+    el.uploadDialog = $("uploadDialog");
+    el.uploadDialogClose = $("uploadDialogClose");
+    el.uploadChoose = $("uploadChoose");
+    el.uploadInput = $("uploadInput");
+    el.uploadSelection = $("uploadSelection");
+    el.uploadList = $("uploadList");
+    el.uploadProgressStatus = $("uploadProgressStatus");
+    el.uploadProgressCount = $("uploadProgressCount");
+    el.uploadProgressTrack = $("uploadProgressTrack");
+    el.uploadProgressBar = $("uploadProgressBar");
+    el.uploadSubmit = $("uploadSubmit");
+    el.uploadCancel = $("uploadCancel");
     el.imageDialog = $("imageDialog");
     el.imageDialogTitle = $("imageDialogTitle");
     el.imageDialogSource = $("imageDialogSource");
