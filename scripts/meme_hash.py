@@ -32,6 +32,15 @@ REPOSITORY = os.environ.get("GITHUB_REPOSITORY", "lin-alg/NaiLoong")
 API_ROOT = "https://api.github.com"
 STATE_PATH = ".cache/meme-hash/state.json"
 ISSUE_NUMBER = 1
+# data/ 下不是表情条目数组的文件：目录、标签、语音和桌宠各有自己的结构，
+# PR 哈希检查要跳过它们，否则会把语音条目当成缺少 url 的表情而报错。
+NON_ENTRY_DATA_FILES = {
+    "manifest.json",
+    "tags.json",
+    "tag-translations.json",
+    "pet.json",
+    "voice.json",
+}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_COMMENT_IMAGES = 5
 MAX_DOWNLOAD_RETRIES = 4
@@ -610,7 +619,7 @@ def new_data_urls(github: GitHub, pull_request):
         filename = item.get("filename", "")
         if not filename.startswith("data/") or not filename.endswith(".json"):
             continue
-        if PurePosixPath(filename).name in {"manifest.json", "tags.json", "tag-translations.json"}:
+        if PurePosixPath(filename).name in NON_ENTRY_DATA_FILES:
             continue
         base_filename = item.get("previous_filename", filename)
         base_entries = github.pr_file_json(
