@@ -35,19 +35,17 @@
   };
   const cache = new Map();
   const context = { url: "", title: "", anchor: null };
-  let eggAudio = null;
-  let eggAudioSrc = "";
+  let voiceAudio = null;
+  let voiceAudioSrc = "";
+  let voicePlaying = "";
+  let voiceRenderKey = "";
+
+  const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
+  const THEME_ICONS = { auto: "🌗", light: "☀️", dark: "🌙", naiwa: "🍼" };
+  let previousTheme = "auto";
 
   const EASTER_EGG = {
-    defaultSrc: "assets/audio/nailong_laugh.mp3",
-    naiwaSources: [
-      "assets/audio/nailong_laugh.mp3",
-      "assets/audio/hola_ganbadie.mp3",
-      "assets/audio/gajiaosai.mp3",
-      "assets/audio/gagadilashui.mp3",
-      "assets/audio/dupu.mp3"
-    ],
-    naidanSrc: "assets/audio/andi.mp3",
+    fallbackSrc: "assets/audio/nailong_laugh.mp3",
     chance: 0.25,
     volume: 0.7
   };
@@ -60,6 +58,9 @@
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25Zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0Z"/></svg>';
   const ICON_MARKDOWN =
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14.85 3c.63 0 1.15.52 1.15 1.15v7.7c0 .63-.52 1.15-1.15 1.15H1.15c-.63 0-1.15-.52-1.15-1.15v-7.7C0 3.52.52 3 1.15 3ZM9 11v-4H7v4H5.5L8 13.5 10.5 7H9Zm4.5 0h-2V6h-2v5h-2l3 3.5 3-3.5Z"/></svg>';
+
+  const ICON_PLAY =
+    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
 
   const CTX_ACTIONS = [
     { action: "download", label: "下载图片", icon: ICON_DOWNLOAD },
@@ -292,13 +293,28 @@
     return cut;
   }
 
+  async function loadVoice(meta) {
+    if (!meta || !meta.voice) return [];
+    let items;
+    try {
+      items = await fetchJSON(CONFIG.dataBase + meta.voice);
+    } catch (err) {
+      return [];
+    }
+    if (!Array.isArray(items)) return [];
+    return items.filter((item) => item && typeof item.src === "string" && item.src.trim());
+  }
+
   async function loadChar(meta) {
-    const subEntries = await Promise.all(
-      (meta.subcategories || []).map(async (sub) => {
-        const items = await fetchJSON(CONFIG.dataBase + sub.file);
-        return [sub.id, { meta: sub, items: Array.isArray(items) ? items : [] }];
-      })
-    );
+    const [subEntries, voice] = await Promise.all([
+      Promise.all(
+        (meta.subcategories || []).map(async (sub) => {
+          const items = await fetchJSON(CONFIG.dataBase + sub.file);
+          return [sub.id, { meta: sub, items: Array.isArray(items) ? items : [] }];
+        })
+      ),
+      loadVoice(meta)
+    ]);
 
     let tagsJson = {};
     try {
@@ -322,7 +338,7 @@
       total += sub.items.length;
     });
 
-    return { meta, subs, tagIndex, total };
+    return { meta, subs, tagIndex, total, voice };
   }
 
   function currentChar() {
@@ -695,9 +711,55 @@
     el.roleIntro.textContent = (char.meta.icon ? char.meta.icon + " " : "") + desc;
   }
 
+  function voiceBubbleMarkup(item, char) {
+    const text = item.text && String(item.text).trim() ? String(item.text).trim() : "语音";
+    return (
+      '<button class="voice-bubble" type="button" aria-pressed="false"' +
+      ' data-src="' +
+      esc(item.src) +
+      '" aria-label="' +
+      esc((char.meta.name || "角色") + "语音：" + text) +
+      '">' +
+      '<span class="voice-avatar" aria-hidden="true">' +
+      esc(char.meta.icon || "🍼") +
+      "</span>" +
+      '<span class="voice-bubble-body">' +
+      '<span class="voice-text">' +
+      esc(text) +
+      "</span>" +
+      '<span class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>' +
+      '<span class="voice-play" aria-hidden="true">' +
+      ICON_PLAY +
+      "</span>" +
+      "</span></button>"
+    );
+  }
+
+  function renderVoice() {
+    if (!el.voiceSection || !el.voiceList) return;
+    const char = currentChar();
+    const items = voiceSources();
+    if (!char || !items.length) {
+      el.voiceSection.hidden = true;
+      el.voiceList.innerHTML = "";
+      voiceRenderKey = "";
+      return;
+    }
+    // 列表内容没变时不重建节点，避免搜索和翻页打断正在跑的播放动画。
+    const key = char.meta.id + "|" + items.map((item) => item.src + "=" + (item.text || "")).join("|");
+    el.voiceSection.hidden = false;
+    el.voiceTitle.textContent = (char.meta.name || "角色") + "语音";
+    if (key !== voiceRenderKey) {
+      el.voiceList.innerHTML = items.map((item) => voiceBubbleMarkup(item, char)).join("");
+      voiceRenderKey = key;
+    }
+    markVoicePlaying();
+  }
+
   function render() {
     renderSidebar();
     renderIntro();
+    renderVoice();
     renderTabs();
     renderTagPanel();
     renderGrid();
@@ -1078,20 +1140,42 @@
   }
 
   function applyTheme(mode) {
-    document.documentElement.dataset.theme = mode;
-    storageSet("nai-theme", mode);
-    const icons = { auto: "🌗", light: "☀️", dark: "🌙" };
-    const names = { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色" };
-    el.themeIcon.textContent = icons[mode] || icons.auto;
-    el.themeToggle.title = names[mode] || names.auto;
-    el.themeToggle.setAttribute("aria-label", names[mode] || names.auto);
+    const theme = THEME_NAMES[mode] ? mode : "auto";
+    if (theme !== "naiwa") {
+      previousTheme = theme;
+      storageSet("nai-theme-base", theme);
+    }
+    document.documentElement.dataset.theme = theme;
+    storageSet("nai-theme", theme);
+    el.themeIcon.textContent = THEME_ICONS[theme];
+    el.themeToggle.title = "主题：" + THEME_NAMES[theme];
+    el.themeToggle.setAttribute("aria-label", "主题：" + THEME_NAMES[theme]);
+    setNaiwaButtons(theme === "naiwa");
+  }
+
+  function setNaiwaButtons(on) {
+    (el.naiwaToggles || []).forEach((node) => {
+      node.classList.toggle("is-on", on);
+      node.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function toggleNaiwaTheme() {
+    if (document.documentElement.dataset.theme === "naiwa") {
+      applyTheme(previousTheme);
+      toast("已切换主题：" + THEME_NAMES[previousTheme]);
+    } else {
+      applyTheme("naiwa");
+      toast("已切换主题：奶蛙");
+    }
   }
 
   function cycleTheme() {
-    const order = ["auto", "dark", "light"];
-    const next = order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length];
+    const order = ["auto", "dark", "light", "naiwa"];
+    const current = order.indexOf(document.documentElement.dataset.theme);
+    const next = order[(current + 1) % order.length];
     applyTheme(next);
-    toast("已切换主题：" + ({ auto: "跟随系统", dark: "深色", light: "浅色" })[next]);
+    toast("已切换主题：" + THEME_NAMES[next]);
   }
 
   function formatStars(n) {
@@ -1191,52 +1275,78 @@
     });
   }
 
-  function easterEggSource() {
-    if (state.charId === "naidan") return EASTER_EGG.naidanSrc;
-    if (state.charId === "naiwa") {
-      const sources = EASTER_EGG.naiwaSources;
-      return sources[Math.floor(Math.random() * sources.length)];
-    }
-    return EASTER_EGG.defaultSrc;
+  function voiceSources() {
+    const char = currentChar();
+    return char && Array.isArray(char.voice) ? char.voice : [];
   }
 
-  function primeEasterEgg(src) {
-    if (eggAudio || typeof Audio !== "function") return;
-    try {
-      eggAudio = new Audio(src || EASTER_EGG.defaultSrc);
-      eggAudioSrc = src || EASTER_EGG.defaultSrc;
-      eggAudio.preload = "auto";
-      eggAudio.volume = EASTER_EGG.volume;
-      // 提前缓冲，首次触发听不出加载延迟。
-      eggAudio.load();
-    } catch (err) {
-      eggAudio = null;
-      eggAudioSrc = "";
-    }
+  function markVoicePlaying() {
+    if (!el.voiceList) return;
+    el.voiceList.querySelectorAll(".voice-bubble").forEach((bubble) => {
+      const on = !!voicePlaying && bubble.dataset.src === voicePlaying;
+      bubble.classList.toggle("is-playing", on);
+      bubble.setAttribute("aria-pressed", String(on));
+    });
   }
 
-  // 彩蛋：不弹提示、不打断操作，播放失败也保持静默。
-  function playEasterEgg() {
-    const src = easterEggSource();
-    if (eggAudioSrc !== src) {
-      if (eggAudio) {
+  function stopVoice() {
+    voicePlaying = "";
+    if (voiceAudio) {
+      try {
+        voiceAudio.pause();
+      } catch (err) {
+      }
+    }
+    markVoicePlaying();
+  }
+
+  function playVoiceSrc(src) {
+    if (!src || typeof Audio !== "function") return;
+    if (voiceAudioSrc !== src) {
+      if (voiceAudio) {
         try {
-          eggAudio.pause();
-          eggAudio.src = "";
+          voiceAudio.pause();
+          voiceAudio.src = "";
         } catch (err) {
         }
       }
-      eggAudio = null;
-      eggAudioSrc = "";
+      voiceAudio = new Audio();
+      voiceAudio.volume = EASTER_EGG.volume;
+      voiceAudio.addEventListener("ended", () => {
+        if (voicePlaying === src) stopVoice();
+      });
+      voiceAudio.addEventListener("error", () => {
+        if (voicePlaying === src) stopVoice();
+      });
+      voiceAudio.src = src;
+      voiceAudioSrc = src;
     }
-    primeEasterEgg(src);
-    if (!eggAudio) return;
+    voicePlaying = src;
     try {
-      eggAudio.currentTime = 0;
-      const playback = eggAudio.play();
-      if (playback && typeof playback.catch === "function") playback.catch(() => {});
+      voiceAudio.currentTime = 0;
+      const playback = voiceAudio.play();
+      // 浏览器拦截播放时保持静默，不弹提示。
+      if (playback && typeof playback.catch === "function") {
+        playback.catch(() => {
+          if (voicePlaying === src) stopVoice();
+        });
+      }
     } catch (err) {
+      if (voicePlaying === src) stopVoice();
     }
+    markVoicePlaying();
+  }
+
+  function easterEggSource() {
+    const sources = voiceSources();
+    if (!sources.length) return EASTER_EGG.fallbackSrc;
+    return sources[Math.floor(Math.random() * sources.length)].src;
+  }
+
+  // 彩蛋：不弹提示，不打断正在播放的语音，播放失败也保持静默。
+  function playEasterEgg() {
+    if (voicePlaying) return;
+    playVoiceSrc(easterEggSource());
   }
 
   function bindEvents() {
@@ -1369,6 +1479,17 @@
       if (!target) return;
       event.preventDefault();
       openContextMenu(event, target);
+    });
+
+    el.voiceList.addEventListener("click", (event) => {
+      const bubble = event.target.closest(".voice-bubble");
+      if (!bubble) return;
+      if (bubble.dataset.src === voicePlaying) stopVoice();
+      else playVoiceSrc(bubble.dataset.src);
+    });
+
+    (el.naiwaToggles || []).forEach((node) => {
+      node.addEventListener("click", toggleNaiwaTheme);
     });
 
     // 页面任意位置右键都有机会触发彩蛋，和图片菜单互不影响。
@@ -1507,6 +1628,10 @@
     el.toast = $("toast");
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
+    el.naiwaToggles = Array.from(document.querySelectorAll("[data-naiwa-toggle]"));
+    el.voiceSection = $("voice");
+    el.voiceTitle = $("voiceTitle");
+    el.voiceList = $("voiceList");
     el.mobileMenuToggle = $("mobileMenuToggle");
     el.mobileNav = $("mobileNav");
     el.uploadDialog = $("uploadDialog");
@@ -1536,6 +1661,7 @@
     if (PAGE_SIZES.includes(storedSize)) state.pageSize = storedSize;
 
     applyRepoLinks();
+    previousTheme = storageGet("nai-theme-base") || "auto";
     applyTheme(storageGet("nai-theme") || "auto");
     if (window.GhImg) {
       window.GhImg.configure({ repo: CONFIG.repo });
@@ -1543,7 +1669,6 @@
       window.GhImg.start();
     }
     bindEvents();
-    primeEasterEgg();
     setupReveal();
     loadStars();
     el.grid.innerHTML = skeletonMarkup(8);

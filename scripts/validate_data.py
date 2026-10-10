@@ -206,6 +206,28 @@ def validate_data(root: Path | str) -> list[str]:
                     else:
                         seen_urls[normalized_url] = entry_owner
 
+        voice_value = role.get("voice")
+        if voice_value is not None:
+            voice_path = resolve_data_file(voice_value, owner, "voice")
+            if voice_path is not None:
+                if role_id and voice_path.parent.name != role_id:
+                    errors.append(
+                        f"{owner}: voice file must be inside data/{role_id}/; "
+                        f"found data/{voice_path.parent.name}/"
+                    )
+                if not voice_path.is_file():
+                    errors.append(
+                        f"{owner}: voice file not found: {_display_path(voice_path, root)}"
+                    )
+                else:
+                    referenced_entries.add(voice_path)
+                    _validate_voice_entries(
+                        loaded.get(voice_path, INVALID),
+                        _display_path(voice_path, root),
+                        root,
+                        errors,
+                    )
+
         if role_id and category_paths:
             tags_value = role.get("tags")
             if tags_value is None:
@@ -373,6 +395,53 @@ def _validate_url(value, owner, root, errors):
         return None
 
     return f"https://github.com/{owner_name.lower()}/NaiLoong/blob/{commit}/{parts.as_posix()}"
+
+
+def _validate_voice_entries(value, owner, root, errors):
+    if value is INVALID:
+        return
+    if not isinstance(value, list):
+        errors.append(f"{owner}: voice file must contain a JSON array")
+        return
+
+    seen_sources = set()
+    for entry_index, entry in enumerate(value):
+        entry_owner = f"{owner} voice #{entry_index}"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_owner}: expected an object")
+            continue
+
+        text = entry.get("text")
+        if not isinstance(text, str) or not text.strip():
+            errors.append(f'{entry_owner}: "text" must be a non-empty string')
+
+        source = entry.get("src")
+        if not isinstance(source, str) or not source.strip():
+            errors.append(f'{entry_owner}: "src" must be a non-empty path inside assets/audio/')
+            continue
+        if source in seen_sources:
+            errors.append(f"{entry_owner}: duplicate voice src {source!r}")
+            continue
+        seen_sources.add(source)
+        _validate_audio_src(source, entry_owner, root, errors)
+
+
+def _validate_audio_src(value, owner, root, errors):
+    if not value.startswith("assets/audio/"):
+        errors.append(f'{owner}: "src" must point inside assets/audio/: {value!r}')
+        return
+    local_path = PurePosixPath(value)
+    if ".." in local_path.parts or "\\" in value:
+        errors.append(f'{owner}: audio path must stay inside assets/audio/: {value!r}')
+        return
+    target = (root / Path(*local_path.parts)).resolve()
+    try:
+        target.relative_to((root / "assets" / "audio").resolve())
+    except ValueError:
+        errors.append(f'{owner}: audio path must stay inside assets/audio/: {value!r}')
+        return
+    if not target.is_file():
+        errors.append(f"{owner}: audio file not found: {value}")
 
 
 def _validate_tag_definitions(value, owner, errors):

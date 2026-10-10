@@ -63,7 +63,8 @@ node tests/md.test.js
     "subcategories": [
       { "id": "animated", "name": "动图", "file": "naiwa/animated.json" },
       { "id": "static", "name": "静态图", "file": "naiwa/static.json" }
-    ]
+    ],
+    "voice": "naiwa/voice.json"
   }
 ]
 ```
@@ -72,6 +73,7 @@ node tests/md.test.js
 - 角色 ID 在整个 manifest 中唯一；分类 ID 在同一角色内唯一。ID 使用小写英文、数字和单个连字符分隔，例如 `naiwa`、`new-role`。
 - 角色目录为 `data/<role-id>/`。`file` 是相对 `data/` 的 `.json` 路径，必须在该角色目录内；分类文件都要在 manifest 中登记。
 - 默认从第一个分类文件所在目录读取 `tags.json`。也可以在角色对象的 `tags` 字段中指定相对 `data/` 的标签文件路径。
+- `voice` 可选，指向该角色的语音文件；没有语音的角色省略该字段。
 
 ### 表情记录：分类文件
 
@@ -86,6 +88,18 @@ node tests/md.test.js
 ```
 
 `title` 和 `url` 是非空字符串；`tags` 按下面的标签规则填写。修订已有表情时修改原条目，并保留已有来源信息。
+
+### 角色语音：`voice.json`
+
+语音文件是 JSON 数组，每条记录一段可播放的语音；没有语音时填写 `[]`。
+
+```json
+{ "text": "咳哈哈哈哈~", "src": "assets/audio/nailong_laugh.mp3" }
+```
+
+- `text` 是气泡上显示的文字，`src` 是音频相对站点根目录的路径，必须指向 `assets/audio/` 下已存在的文件；同一文件中的 `src` 不能重复。
+- 音频由主仓库提供，不走投稿区。新增语音先把文件放进 `assets/audio/`，再在角色的语音文件中登记。
+- 网站在表情库上方的语音区渲染当前角色的语音，点击气泡播放；页面右键随机播放的也是这批语音。角色没有登记语音时，语音区自动隐藏。
 
 ### 标签：`tags.json`
 

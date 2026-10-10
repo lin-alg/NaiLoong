@@ -44,7 +44,8 @@
 - `preview` 分支的 `previews/`：主仓库 Action 生成的轻量 WebP 预览图；不在 `main` 的数据 PR 中提交。
 - `data/manifest.json`：角色和分类目录。
 - `data/tag-translations.json`：标签维度的中英文显示名；不在前端代码中硬编码维度译名。
-- `data/<role-id>/`：该角色的分类文件及 `tags.json`。
+- `data/<role-id>/`：该角色的分类文件、`tags.json` 和可选的 `voice.json`。
+- `assets/audio/`：主仓库提供的角色语音音频，由 `data/<role-id>/voice.json` 登记。
 - `hash.txt`：主分支已归档图片的 SHA-256 哈希，每行一个哈希值；不写图片 URL 或键值。
 - `.github/ISSUE_TEMPLATE/`：网站或项目建议、问题反馈模板及共享投稿 Issue 入口。
 - `.github/workflows/`：PR 测试/数据校验和 GitHub Pages 部署。
@@ -65,6 +66,7 @@
 - `tags` 数组必须恰有一个元素对应每个标签维度，按维度顺序填写非负本地整数序号；未知维度使用 JSON `null`。例如 `[2, null, 0]` 表示第一维取本地序号 2、第二维未知、第三维取本地序号 0。
 - `tags` 也允许对象写法 `{ "维度名": 本地整数序号或标签文字或 null }`，适合强调维度名或只记录部分维度。未知维度名和未定义的序号/标签文字均无效。
 - 当前项目的常规分类为 `animated`（动图）和 `static`（静态图）；数据结构不在校验器中硬编码只允许这两个分类。极短视频应转换成 GIF；较长视频不收录。
+- 角色语音由可选的 `data/<role-id>/voice.json` 驱动：数组每项含非空 `text` 和 `src`，`src` 必须指向 `assets/audio/` 下已存在的文件，同一文件内 `src` 不重复。语音区随当前角色渲染，角色无语音时隐藏；不在 `app.js` 或 `index.html` 写死音频列表。
 - 新投稿 `url` 必须指向贡献者公开 Fork 中图片上传 commit 的 `NaiLoong/blob/<40位commit-sha>/<path>`、紧凑格式 `<fork-owner>/<40位commit-sha>/<path>` 或同一文件的 GitHub RAW URL。校验器把等价地址归一后检查重复。禁止使用会随分支后续提交改变内容的 `image` 分支 URL。校验器只校验 URL 结构，不联网请求图片；本地 `assets/placeholders/` 下已存在的占位资源例外保留。
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
 - 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存，失败时保留旧缓存以便下次恢复。预占位代表仍有效的待处理图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`，写入成功后清理 `ingested` 临时记录。待处理评论换图或清空时回收旧占位；删除未认领评论时释放占位；已认领评论删除后保留占位并标记为已删除，直到对应 PR 合并或关闭；未合并关闭 PR 时保留仍存在的 Issue 投稿占位并解除认领，纯 PR 占位释放供重新检查。

@@ -46,6 +46,8 @@
           <kbd>/</kbd>
         </form>
 
+        <button id="naiwaToggle" class="btn btn-ghost btn-sm hide-sm" type="button" data-naiwa-toggle aria-pressed="false" title="切换到奶蛙主题">🐸 奶蛙</button>
+
         <button id="themeToggle" class="btn btn-ghost icon-btn" type="button" aria-label="切换配色主题" title="切换配色主题">
           <span id="themeIcon" aria-hidden="true">🌗</span>
         </button>
@@ -76,6 +78,10 @@
         <button class="mobile-nav-upload" type="button" data-upload-trigger>
           <span class="mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none"><path d="M8 10V2.5m0 0L5.25 5.25M8 2.5l2.75 2.75M3 9.5v3.75h10V9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span>上传图片</span>
+        </button>
+        <button class="mobile-nav-toggle" type="button" data-naiwa-toggle aria-pressed="false">
+          <span class="mobile-nav-icon" aria-hidden="true">🐸</span>
+          <span>奶蛙主题</span>
         </button>
       </nav>
     </div>
@@ -114,6 +120,17 @@
         <div class="hero-tile t3"><img src="assets/placeholders/naiwa_redemption.gif" alt=""></div>
         <div class="hero-tile t4"><img src="assets/placeholders/naijing.jpg" alt=""></div>
       </div>
+    </div>
+  </section>
+
+  <section class="voice-wall" id="voice" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Voice</p>
+        <h2 class="section-title" id="voiceTitle">角色语音</h2>
+        <p class="section-lead">点气泡收听对应语音。在页面任意位置点右键，还会随机播放一条。</p>
+      </div>
+      <div class="voice-list" id="voiceList" aria-label="角色语音"></div>
     </div>
   </section>
 

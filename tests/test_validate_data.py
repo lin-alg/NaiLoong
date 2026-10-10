@@ -215,6 +215,98 @@ class ValidateDataTests(unittest.TestCase):
         errors = validate_data(self.root)
         self.assertTrue(any("entry file is not referenced by manifest" in error for error in errors))
 
+    def write_audio(self, name):
+        audio_dir = self.root / "assets" / "audio"
+        audio_dir.mkdir(parents=True, exist_ok=True)
+        (audio_dir / name).write_bytes(b"\x00")
+
+    def set_manifest_voice(self, value):
+        manifest = json.loads((self.root / "data/manifest.json").read_text(encoding="utf-8"))
+        manifest[0]["voice"] = value
+        self.write_json("data/manifest.json", manifest)
+
+    def test_accepts_role_voice_file(self):
+        self.write_audio("laugh.mp3")
+        self.write_audio("dupu.mp3")
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json(
+            "data/naiwa/voice.json",
+            [
+                {"text": "咳哈哈哈哈~", "src": "assets/audio/laugh.mp3"},
+                {"text": "嘟噗。", "src": "assets/audio/dupu.mp3"},
+            ],
+        )
+
+        self.assertEqual(validate_data(self.root), [])
+
+    def test_accepts_empty_voice_file(self):
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json("data/naiwa/voice.json", [])
+
+        self.assertEqual(validate_data(self.root), [])
+
+    def test_rejects_voice_file_outside_role_directory(self):
+        self.write_audio("laugh.mp3")
+        self.set_manifest_voice("naidan/voice.json")
+        self.write_json(
+            "data/naidan/voice.json",
+            [{"text": "安~迪~", "src": "assets/audio/laugh.mp3"}],
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("voice file must be inside data/naiwa/" in error for error in errors))
+
+    def test_rejects_missing_voice_file(self):
+        self.set_manifest_voice("naiwa/voice.json")
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("voice file not found" in error for error in errors))
+
+    def test_rejects_voice_entry_without_text(self):
+        self.write_audio("laugh.mp3")
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json(
+            "data/naiwa/voice.json",
+            [{"text": "   ", "src": "assets/audio/laugh.mp3"}],
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any('"text" must be a non-empty string' in error for error in errors))
+
+    def test_rejects_voice_src_outside_audio_directory(self):
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json(
+            "data/naiwa/voice.json",
+            [{"text": "咳哈哈", "src": "assets/placeholders/laugh.mp3"}],
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any('"src" must point inside assets/audio/' in error for error in errors))
+
+    def test_rejects_voice_src_without_existing_audio_file(self):
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json(
+            "data/naiwa/voice.json",
+            [{"text": "咳哈哈", "src": "assets/audio/missing.mp3"}],
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("audio file not found" in error for error in errors))
+
+    def test_rejects_duplicate_voice_src(self):
+        self.write_audio("laugh.mp3")
+        self.set_manifest_voice("naiwa/voice.json")
+        self.write_json(
+            "data/naiwa/voice.json",
+            [
+                {"text": "咳哈哈", "src": "assets/audio/laugh.mp3"},
+                {"text": "哈哈哈", "src": "assets/audio/laugh.mp3"},
+            ],
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("duplicate voice src" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
