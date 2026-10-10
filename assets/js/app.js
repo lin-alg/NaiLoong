@@ -41,7 +41,15 @@
   let voicePlaying = "";
 
   const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
-  const THEME_ICONS = { auto: "🌗", light: "☀️", dark: "🌙", naiwa: "🍼" };
+  const THEME_ICONS = {
+    auto: "lucide:sun-moon",
+    light: "lucide:sun",
+    dark: "lucide:moon",
+    naiwa: "tabler:baby-bottle"
+  };
+  const FALLBACK_ICON = "tabler:baby-bottle";
+  // icons.js 没加载时按空图标处理，页面其余功能不受影响。
+  const ICONS = window.NaiIcons || { svg: () => "", markup: () => "", hydrate: () => {} };
   let previousTheme = "auto";
 
   const EASTER_EGG = {
@@ -407,7 +415,7 @@
           esc(meta.id) +
           '">' +
           '<span class="side-icon" aria-hidden="true">' +
-          esc(meta.icon || "🍼") +
+          ICONS.markup(meta.icon || FALLBACK_ICON, 16) +
           "</span>" +
           '<span class="side-name">' +
           esc(meta.name) +
@@ -706,7 +714,8 @@
       return;
     }
     el.roleIntro.hidden = false;
-    el.roleIntro.textContent = (char.meta.icon ? char.meta.icon + " " : "") + desc;
+    const iconHtml = ICONS.markup(char.meta.icon || "", 16);
+    el.roleIntro.innerHTML = (iconHtml ? iconHtml + " " : "") + esc(desc);
   }
 
   function render() {
@@ -1100,7 +1109,7 @@
     }
     document.documentElement.dataset.theme = theme;
     storageSet("nai-theme", theme);
-    el.themeIcon.textContent = THEME_ICONS[theme];
+    el.themeIcon.innerHTML = ICONS.svg(THEME_ICONS[theme], 18);
     el.themeToggle.title = "主题：" + THEME_NAMES[theme];
     el.themeToggle.setAttribute("aria-label", "主题：" + THEME_NAMES[theme]);
     setNaiwaButtons(theme === "naiwa");
@@ -1601,6 +1610,7 @@
   }
 
   async function init() {
+    ICONS.hydrate(document);
     el.searchForm = $("searchForm");
     el.searchInput = $("searchInput");
     el.randomBtn = $("randomBtn");

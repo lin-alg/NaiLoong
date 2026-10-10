@@ -24,7 +24,7 @@
   <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="#/">
-        <span class="brand-mark" aria-hidden="true">🍼</span>
+        <span class="brand-mark" data-icon="tabler:baby-bottle" data-icon-size="20" aria-hidden="true"></span>
         <span class="brand-name">奶-hub</span>
         <span class="brand-sub">NaiLoong</span>
       </a>
@@ -46,12 +46,12 @@
           <kbd>/</kbd>
         </form>
 
-        <button id="naiwaToggle" class="btn btn-ghost btn-sm hide-sm" type="button" data-naiwa-toggle aria-pressed="false" title="切换到奶蛙主题">🐸 奶蛙</button>
+        <button id="naiwaToggle" class="btn btn-ghost btn-sm hide-sm" type="button" data-naiwa-toggle aria-pressed="false" title="切换到奶蛙主题"><span data-icon="lucide-lab:frog-face" aria-hidden="true"></span><span>奶蛙</span></button>
 
-        <button id="petToggle" class="btn btn-ghost btn-sm hide-sm" type="button" data-pet-toggle aria-pressed="true" title="让奶蛙躲起来">🐾 桌宠</button>
+        <button id="petToggle" class="btn btn-ghost btn-sm hide-sm" type="button" data-pet-toggle aria-pressed="true" title="让奶蛙躲起来"><span data-icon="lucide:paw-print" aria-hidden="true"></span><span>桌宠</span></button>
 
         <button id="themeToggle" class="btn btn-ghost icon-btn" type="button" aria-label="切换配色主题" title="切换配色主题">
-          <span id="themeIcon" aria-hidden="true">🌗</span>
+          <span id="themeIcon" data-icon="lucide:sun-moon" aria-hidden="true"></span>
         </button>
 
         <a class="btn btn-secondary hide-sm star-btn" data-repo-link data-repo-suffix="/stargazers" href="#" rel="noopener" title="觉得有趣就给项目点个 Star">
@@ -82,11 +82,11 @@
           <span>上传图片</span>
         </button>
         <button class="mobile-nav-toggle" type="button" data-naiwa-toggle aria-pressed="false">
-          <span class="mobile-nav-icon" aria-hidden="true">🐸</span>
+          <span class="mobile-nav-icon" data-icon="lucide-lab:frog-face" aria-hidden="true"></span>
           <span>奶蛙主题</span>
         </button>
         <button class="mobile-nav-toggle" type="button" data-pet-toggle aria-pressed="true">
-          <span class="mobile-nav-icon" aria-hidden="true">🐾</span>
+          <span class="mobile-nav-icon" data-icon="lucide:paw-print" aria-hidden="true"></span>
           <span>奶蛙桌宠</span>
         </button>
       </nav>
@@ -144,7 +144,7 @@
       <div class="toolbar">
         <div class="tabs" id="subTabs" role="tablist" aria-label="表情类型"></div>
         <div class="toolbar-meta">
-          <button class="btn btn-ghost btn-sm" id="randomBtn" type="button" title="从当前结果中随机打开一张">🎲 手气不错</button>
+          <button class="btn btn-ghost btn-sm" id="randomBtn" type="button" title="从当前结果中随机打开一张"><span data-icon="lucide:dices" aria-hidden="true"></span><span>手气不错</span></button>
           <span class="count" id="resultCount" role="status" aria-live="polite">—</span>
           <button class="btn btn-ghost btn-sm" id="clearFilters" type="button" hidden>清除筛选</button>
         </div>
@@ -157,14 +157,14 @@
       <div class="pager pager-bottom" id="pagerBottom" aria-label="分页导航"></div>
 
       <div class="empty-state" id="emptyState" hidden>
-        <div class="empty-icon" aria-hidden="true">🔍</div>
+        <div class="empty-icon" data-icon="lucide:search" data-icon-size="40" aria-hidden="true"></div>
         <h3>没找到匹配的表情</h3>
         <p>换个关键词，或者点掉几个标签试试。</p>
         <button class="btn btn-secondary" id="emptyReset" type="button">重置筛选</button>
       </div>
 
       <div class="empty-state" id="errorState" hidden>
-        <div class="empty-icon" aria-hidden="true">🚨</div>
+        <div class="empty-icon" data-icon="lucide:circle-alert" data-icon-size="40" aria-hidden="true"></div>
         <h3>数据加载失败</h3>
         <p id="errorMsg">请检查网络，或稍后重试。</p>
         <button class="btn btn-primary" id="retryBtn" type="button">重新加载</button>
@@ -211,7 +211,7 @@
 
   <footer class="site-footer">
     <div class="container footer-inner">
-      <p>🍼🐲 <strong>奶-hub</strong> —— 理解奶蛙，欣赏奶蛙，成为奶蛙。</p>
+      <p><span class="footer-mark" aria-hidden="true"><span data-icon="tabler:baby-bottle"></span><span data-icon="tabler:dragon"></span></span> <strong>奶-hub</strong> —— 理解奶蛙，欣赏奶蛙，成为奶蛙。</p>
       <p class="footer-links">
         <a class="link" data-repo-link href="#" rel="noopener">GitHub</a>
         <a class="link" data-repo-link data-repo-suffix="/issues/1" href="#" rel="noopener">投稿区</a>
@@ -289,6 +289,7 @@
     <div class="noscript">本站需要启用 JavaScript 才能渲染表情数据。</div>
   </noscript>
 
+  <script src="assets/js/icons.js"></script>
   <script src="assets/js/search.js"></script>
   <script src="assets/js/ghimg.js"></script>
   <script src="assets/js/pet.js"></script>

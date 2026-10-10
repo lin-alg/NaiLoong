@@ -2,7 +2,7 @@
   {
     "id": "naiwa",
     "name": "奶蛙",
-    "icon": "🍼🐸",
+    "icon": "tabler:baby-bottle lucide-lab:frog-face",
     "desc": "奶-hub的大明星，人见人爱。咳哈哈哈哈~",
     "subcategories": [
       { "id": "animated", "name": "动图", "file": "naiwa/animated.json" },
@@ -13,7 +13,7 @@
   {
     "id": "naidan",
     "name": "奶蛋",
-    "icon": "🍼🥚",
+    "icon": "tabler:baby-bottle lucide:egg-fried",
     "desc": "奶鸡下的蛋，能量巨大。安~迪~",
     "subcategories": [
       { "id": "animated", "name": "动图", "file": "naidan/animated.json" },

@@ -36,6 +36,7 @@
 - `index.html`：网站主页面骨架、导航和文案。
 - `docs.html`：站内文档阅读器页面，搭配 `assets/js/docs.js` 与 `assets/css/docs.css`；把 `docs/` 和 `CONTRIBUTING.md` 渲染成网页。
 - `assets/css/`：设计参考 `github-design-system-analysis.md`。
+- `assets/js/icons.js`：站内 UI 图标注册表，SVG 路径取自 Iconify 的 lucide、lucide-lab 与 tabler 集合并内联在仓库里；界面不使用 emoji。
 - `assets/js/app.js`：加载 manifest 和数据，渲染页面、路由和交互。
 - `assets/js/search.js`：标签定义解析、搜索和筛选语义。
 - `assets/js/ghimg.js`：GitHub 图片链接转换、代理探测和失败回退。
@@ -63,6 +64,7 @@
 ## 数据契约
 
 - `data/manifest.json` 是非空数组。每个角色含唯一、非空 `id` 和非空 `name`，至少有一个分类。角色和分类 ID 使用小写英文、数字及连字符；角色目录名与角色 ID 相同。
+- 角色可选的 `icon` 是 `assets/js/icons.js` 中登记的图标名（形如 `lucide:paw-print`），多个名字用空格分隔；不使用 emoji，未登记的名字会被校验器拒绝且在前端渲染为空。新增界面图标先把 Iconify 的 SVG 路径加进注册表。
 - `subcategories[].file` 是相对 `data/` 的 `.json` 分类文件路径，必须位于对应角色目录下。分类 ID 在同一角色内唯一，分类名称非空。
 - 每个分类文件是 JSON 数组；数组中每一项是对象，包含非空 `title`、非空 `url` 和 `tags`。
 - `tags.json` 是有序 JSON 对象。顶层键为标签维度，维度值是“维度内标签序号 → 标签文字”的对象。维度书写顺序决定 `tags` 数组位置；维度内部的整数序号不做跨维度展平。

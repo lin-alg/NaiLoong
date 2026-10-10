@@ -261,6 +261,27 @@ code {
   padding: 1px 6px;
 }
 
+/* ---------- Icons ---------- */
+/* assets/js/icons.js 把 [data-icon] 宿主填成内联 SVG；宿主按行内元素与文字基线对齐。 */
+[data-icon] {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.18em;
+}
+
+.icon {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.18em;
+}
+
+.footer-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  vertical-align: -0.18em;
+}
+
 /* ---------- Buttons ---------- */
 .btn {
   display: inline-flex;
@@ -401,7 +422,15 @@ code {
 }
 
 .brand-mark {
+  display: inline-flex;
+  align-self: center;
   font-size: 20px;
+}
+
+/* 图标跟随 .brand-mark 的字号，窄屏那两条只改字号的规则仍然生效。 */
+.brand-mark .icon {
+  width: 1em;
+  height: 1em;
 }
 
 .brand-sub {
@@ -733,7 +762,12 @@ code {
 }
 
 .side-icon {
-  font-size: 16px;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.side-item.is-active .side-icon {
+  color: var(--text);
 }
 
 .side-name {
@@ -1368,8 +1402,9 @@ code {
 }
 
 .empty-icon {
-  font-size: 40px;
+  display: inline-flex;
   margin-bottom: var(--sp-3);
+  color: var(--muted);
 }
 
 .empty-state h3 {

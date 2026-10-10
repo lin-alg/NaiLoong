@@ -14,6 +14,9 @@ MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 COMMIT_SHA = re.compile(r"[0-9a-f]{40}\Z", re.IGNORECASE)
 COMPACT_IMAGE_URL = re.compile(r"([A-Za-z0-9-]+)/([0-9a-f]{40})/(.+)\Z", re.IGNORECASE)
+ICON_KEY = re.compile(r'^\s*"([a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*)"\s*:', re.MULTILINE)
+ICON_SPLIT = re.compile(r"[\s,]+")
+ICONS_SOURCE = "assets/js/icons.js"
 INVALID = object()
 
 
@@ -31,6 +34,15 @@ def _display_path(path: Path, root: Path) -> str:
         return path.relative_to(root).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _icon_names(root: Path) -> set[str]:
+    """Read the registered icon names from the frontend icon registry."""
+    try:
+        source = (root / ICONS_SOURCE).read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(ICON_KEY.findall(source))
 
 
 def validate_data(root: Path | str) -> list[str]:
@@ -113,6 +125,8 @@ def validate_data(root: Path | str) -> list[str]:
             return None
         return path
 
+    registered_icons = _icon_names(root)
+
     for role_index, role in enumerate(manifest):
         owner = f"data/manifest.json role #{role_index}"
         if not isinstance(role, dict):
@@ -132,6 +146,16 @@ def validate_data(root: Path | str) -> list[str]:
 
         if not isinstance(role.get("name"), str) or not role["name"].strip():
             errors.append(f"{owner}: needs a non-empty string name")
+
+        icon = role.get("icon")
+        if icon is not None and not isinstance(icon, str):
+            errors.append(f"{owner}: icon must be a string of icon names")
+        elif isinstance(icon, str) and icon.strip() and registered_icons:
+            for token in ICON_SPLIT.split(icon.strip()):
+                if token and token not in registered_icons:
+                    errors.append(
+                        f"{owner}: icon {token!r} is not registered in {ICONS_SOURCE}"
+                    )
 
         categories = role.get("subcategories")
         if not isinstance(categories, list) or not categories:

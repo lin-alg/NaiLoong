@@ -411,6 +411,42 @@ class ValidateDataTests(unittest.TestCase):
         errors = validate_data(self.root)
         self.assertTrue(any('"size" must be a number between 24 and 400' in error for error in errors))
 
+    def write_icon_registry(self, *names):
+        entries = ",\n".join(f'    "{name}": "<path/>"' for name in names)
+        path = self.root / "assets" / "js" / "icons.js"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("var REGISTRY = {\n" + entries + "\n  };\n", encoding="utf-8")
+
+    def set_role_icon(self, value):
+        manifest = json.loads((self.root / "data/manifest.json").read_text(encoding="utf-8"))
+        manifest[0]["icon"] = value
+        self.write_json("data/manifest.json", manifest)
+
+    def test_accepts_registered_role_icon_names(self):
+        self.write_icon_registry("tabler:baby-bottle", "lucide-lab:frog-face")
+        self.set_role_icon("tabler:baby-bottle lucide-lab:frog-face")
+
+        self.assertEqual(validate_data(self.root), [])
+
+    def test_rejects_unregistered_role_icon_name(self):
+        self.write_icon_registry("tabler:baby-bottle")
+        self.set_role_icon("tabler:baby-bottle lucide:ghost")
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("icon 'lucide:ghost' is not registered" in error for error in errors))
+
+    def test_rejects_non_string_role_icon(self):
+        self.write_icon_registry("tabler:baby-bottle")
+        self.set_role_icon(["tabler:baby-bottle"])
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("icon must be a string of icon names" in error for error in errors))
+
+    def test_skips_icon_name_check_without_registry_file(self):
+        self.set_role_icon("tabler:baby-bottle")
+
+        self.assertEqual(validate_data(self.root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

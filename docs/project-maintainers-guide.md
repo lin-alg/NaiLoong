@@ -59,7 +59,7 @@ node tests/md.test.js
   {
     "id": "naiwa",
     "name": "奶蛙",
-    "icon": "🍼🐸",
+    "icon": "tabler:baby-bottle lucide-lab:frog-face",
     "subcategories": [
       { "id": "animated", "name": "动图", "file": "naiwa/animated.json" },
       { "id": "static", "name": "静态图", "file": "naiwa/static.json" }
@@ -74,6 +74,19 @@ node tests/md.test.js
 - 角色目录为 `data/<role-id>/`。`file` 是相对 `data/` 的 `.json` 路径，必须在该角色目录内；分类文件都要在 manifest 中登记。
 - 默认从第一个分类文件所在目录读取 `tags.json`。也可以在角色对象的 `tags` 字段中指定相对 `data/` 的标签文件路径。
 - `voice` 可选，指向该角色的语音文件；没有语音的角色省略该字段。
+- `icon` 可选，是 `assets/js/icons.js` 里登记的图标名，多个名字用空格分隔，侧栏和角色简介会按顺序渲染。图标名写错时校验器报错，前端则渲染为空；界面不使用 emoji。
+
+### 界面图标：`assets/js/icons.js`
+
+站内图标统一用 SVG，路径取自 [Iconify](https://icon-sets.iconify.design/) 的 lucide、lucide-lab（ISC）与 tabler（MIT）集合，随仓库内联，不引入运行时依赖或 CDN。所有图标都是 24×24 视窗、`stroke="currentColor"`，颜色跟随文字色。
+
+```html
+<span data-icon="lucide:search" data-icon-size="40"></span>
+```
+
+- 静态 HTML 写 `data-icon` 宿主，页面脚本启动时由 `NaiIcons.hydrate()` 填充；JS 拼 HTML 用 `NaiIcons.svg(name, size)`，角色 `icon` 这类多图标字段用 `NaiIcons.markup(value, size)`。
+- 新增图标：从 `https://api.iconify.design/<集合>.json?icons=<名字>` 取 `body`，按 `"集合:名字"` 登记进 `REGISTRY`，同时更新校验器可识别的图标名。
+- `scripts/validate_data.py` 会读取该文件里的图标名来校验角色 `icon`，所以注册表的键名保持 `"前缀:名字":` 一行的写法。
 
 ### 表情记录：分类文件
 
@@ -124,7 +137,7 @@ node tests/md.test.js
 - 走路朝向由 `walk-right` / `walk-left` 两行素材提供，不做镜像翻转；呼吸、迈步摆动和落地挤压由 CSS 叠加。
 - 桌宠说话取当前角色 `voice.json` 里的随机一条，台词和音频都不另外维护。
 - 雪碧图取自 [`timerring/codex-pet-naiwa`](https://github.com/timerring/codex-pet-naiwa)（MIT），转成 WebP 后放进 `assets/pet/`；属主仓库资源，不走社区 Fork 图片链路。
-- 缺少 `data/pet.json`、缺 `idle` 或用户关掉桌宠时，页面不显示桌宠；关闭状态记在 `localStorage` 的 `nai-pet-off`，由顶栏「🐾 桌宠」按钮唤出。
+- 缺少 `data/pet.json`、缺 `idle` 或用户关掉桌宠时，页面不显示桌宠；关闭状态记在 `localStorage` 的 `nai-pet-off`，由顶栏「桌宠」按钮唤出。
 
 ### 标签：`tags.json`
 
