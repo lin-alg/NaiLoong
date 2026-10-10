@@ -68,6 +68,224 @@
   --overlay: rgba(31, 35, 40, 0.5);
 }
 
+/* 奶蛙主题：海绵宝宝级的亮黄底 + 海水蓝点缀，圆角和光晕都放软。 */
+:root[data-theme="naiwa"] {
+  --bg: #ffe45c;
+  --bg-subtle: #ffd83d;
+  --surface: #fff6c9;
+  --surface-2: #ffe98f;
+  --surface-light: #fffdf0;
+  --text: #4a3400;
+  --text-on-light: #4a3400;
+  --muted: #6d5210;
+  --accent: #0b7fa8;
+  --primary: #f5a300;
+  --primary-hover: #ffb524;
+  --primary-active: #d98c00;
+  --primary-dark: #8a5800;
+  --text-on-primary: #3a2600;
+  --border: #e8c64a;
+  --border-muted: #f2d96e;
+  --glow: 0 0 24px rgba(245, 163, 0, 0.3);
+  --glow-hover: 0 0 32px rgba(11, 127, 168, 0.32);
+  --header-bg: rgba(255, 228, 92, 0.86);
+  --overlay: rgba(74, 52, 0, 0.45);
+
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+}
+
+:root[data-theme="naiwa"] ::selection {
+  background: rgba(245, 163, 0, 0.42);
+}
+
+/* 奶蛙主题的背景：一只奶蛙眼常驻视口右侧，画完之后每隔几秒眨一下。
+   描边统一 pathLength="1" 归一，画入靠 stroke-dashoffset 1→0，不用量路径长度。
+   眼睛只盖在平涂底色之上，拼图和卡片这些组件仍画在它上面；
+   没有底板的文字层单独抬到眼睛之上，免得被瞳孔压住。 */
+.naiwa-backdrop {
+  display: none;
+}
+
+:root[data-theme="naiwa"] .naiwa-backdrop {
+  display: block;
+  position: fixed;
+  top: 50%;
+  right: 3vmin;
+  width: min(84vmin, 760px);
+  z-index: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* 这些文字直接画在页面背景上，没有自己的底板，所以抬到眼睛之上；
+   拼图、卡片自带不透明底板，留在眼睛下面。 */
+:root[data-theme="naiwa"] .hero-copy,
+:root[data-theme="naiwa"] .sidebar,
+:root[data-theme="naiwa"] .toolbar,
+:root[data-theme="naiwa"] .tag-panel,
+:root[data-theme="naiwa"] .role-intro,
+:root[data-theme="naiwa"] .pager,
+:root[data-theme="naiwa"] .empty-state,
+:root[data-theme="naiwa"] .contribute,
+:root[data-theme="naiwa"] .site-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.naiwa-eye {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.naiwa-eye-ring {
+  fill: none;
+  stroke: #6dfe0c;
+  stroke-opacity: 1;
+  stroke-width: 40;
+  /* 虚线段比 pathLength 略长一点，闭合处才会自己叠上，不留接缝。 */
+  stroke-dasharray: 1.02;
+  stroke-dashoffset: 1.02;
+  animation: naiwa-draw 900ms 200ms ease-out forwards;
+}
+
+.naiwa-eye-pupil {
+  fill: #000;
+  fill-opacity: 1;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: naiwa-grow 420ms 900ms ease-out forwards;
+}
+
+.naiwa-eye-glint {
+  fill: #fff;
+  opacity: 0;
+  animation: naiwa-fade 360ms 1200ms ease-out forwards;
+}
+
+.naiwa-eye-glint-arc {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 30;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: naiwa-draw 360ms 1240ms ease-out forwards;
+}
+
+.naiwa-mouth {
+  fill: none;
+  stroke: #000;
+  stroke-opacity: 1;
+  stroke-width: 48;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: naiwa-draw 1100ms 1500ms ease-out forwards;
+}
+
+/* 眨眼是上下裁切：眼皮窗口收成一条横缝再展开，眼睛本身不被压扁。
+   两层周期互质（6.5s 与 11s）叠在一起，间隔不固定，像偶尔眨一下。 */
+.naiwa-lid {
+  animation: naiwa-blink 6.5s 3s infinite;
+}
+
+.naiwa-lid-2 {
+  animation: naiwa-blink 11s 5.4s infinite;
+}
+
+@keyframes naiwa-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes naiwa-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes naiwa-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes naiwa-blink {
+  0%,
+  91%,
+  100% {
+    y: 243px;
+    height: 314px;
+  }
+  94.5% {
+    y: 376px;
+    height: 48px;
+  }
+  97.5% {
+    y: 243px;
+    height: 314px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 不做画入、也不眨，直接呈现一只睁开的眼睛。 */
+  :root[data-theme="naiwa"] .naiwa-backdrop svg * {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  /* 窄屏首屏要给正文让位，背景眼睛只在更宽的视口出现。 */
+  :root[data-theme="naiwa"] .naiwa-backdrop {
+    display: none;
+  }
+}
+
+/* 奶蛙主题的首屏不要光晕：底色是平涂的奶黄，背景眼睛才不会被叠出斑块。 */
+:root[data-theme="naiwa"] .hero-aurora {
+  display: none;
+}
+
+:root[data-theme="naiwa"] .hero-title,
+:root[data-theme="naiwa"] .section-title {
+  letter-spacing: -0.5px;
+}
+
+:root[data-theme="naiwa"] .pet-bubble {
+  background: #fffdf0;
+  border-color: #e0b93f;
+  box-shadow: 0 2px 0 rgba(170, 130, 15, 0.16);
+}
+
+:root[data-theme="naiwa"] .pet-bubble::after {
+  background: #fffdf0;
+  border-color: #e0b93f;
+}
+
+:root[data-theme="naiwa"] .card:hover {
+  transform: translateY(-6px) rotate(-0.3deg);
+}
+
+:root[data-theme="naiwa"] .btn-ghost.is-on,
+:root[data-theme="naiwa"] .mobile-nav-toggle.is-on {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--primary-dark);
+}
+
 @media (prefers-color-scheme: light) {
   :root[data-theme="auto"] {
     --bg: #ffffff;
@@ -185,6 +403,27 @@ code {
   border: 1px solid var(--border-muted);
   border-radius: var(--r-sm);
   padding: 1px 6px;
+}
+
+/* ---------- Icons ---------- */
+/* assets/js/icons.js 把 [data-icon] 宿主填成内联 SVG；宿主按行内元素与文字基线对齐。 */
+[data-icon] {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.18em;
+}
+
+.icon {
+  display: inline-block;
+  flex: none;
+  vertical-align: -0.18em;
+}
+
+.footer-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  vertical-align: -0.18em;
 }
 
 /* ---------- Buttons ---------- */
@@ -327,7 +566,15 @@ code {
 }
 
 .brand-mark {
+  display: inline-flex;
+  align-self: center;
   font-size: 20px;
+}
+
+/* 图标跟随 .brand-mark 的字号，窄屏那两条只改字号的规则仍然生效。 */
+.brand-mark .icon {
+  width: 1em;
+  height: 1em;
 }
 
 .brand-sub {
@@ -659,7 +906,12 @@ code {
 }
 
 .side-icon {
-  font-size: 16px;
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.side-item.is-active .side-icon {
+  color: var(--text);
 }
 
 .side-name {
@@ -1294,8 +1546,9 @@ code {
 }
 
 .empty-icon {
-  font-size: 40px;
+  display: inline-flex;
   margin-bottom: var(--sp-3);
+  color: var(--muted);
 }
 
 .empty-state h3 {
@@ -1320,6 +1573,195 @@ code {
 .reveal.is-visible {
   opacity: 1;
   transform: none;
+}
+
+/* ---------- Desktop pet ---------- */
+.pet {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: var(--pet-w, 96px);
+  height: var(--pet-h, 104px);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+}
+
+/* 脚下投影：素材是雪碧图背景，用 drop-shadow 只会框出矩形，所以画一个椭圆。 */
+.pet::before {
+  content: "";
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  bottom: -4px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.26), transparent 70%);
+  transition: opacity 160ms ease-out;
+}
+
+.pet.is-airborne::before {
+  opacity: 0;
+}
+
+.pet.is-dragging {
+  cursor: grabbing;
+}
+
+/* 图片弹窗和上传窗口打开时让位，不干扰阅读。 */
+.pet.is-paused {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+}
+
+.pet.is-squash {
+  animation: pet-squash 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pet-squash {
+  0% { scale: 1 1; }
+  35% { scale: 1.14 0.82; }
+  70% { scale: 0.94 1.06; }
+  100% { scale: 1 1; }
+}
+
+.pet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--r-md);
+}
+
+.pet-sprite {
+  width: 100%;
+  height: 100%;
+  background-repeat: no-repeat;
+  background-size: calc(100% * var(--pet-cols, 8)) calc(100% * var(--pet-rows, 9));
+  transform-origin: 50% 100%;
+}
+
+.pet-sprite.pet-breathe {
+  animation: pet-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes pet-breathe {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(-1.5%) scale(1.02, 0.98); }
+}
+
+.pet-sprite.pet-bob {
+  animation: pet-bob 460ms ease-in-out infinite;
+}
+
+@keyframes pet-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-5%) rotate(1.8deg); }
+  75% { transform: translateY(-1%) rotate(-1.8deg); }
+}
+
+.pet[data-state="sleep"] .pet-sprite {
+  filter: saturate(0.65) brightness(0.94);
+}
+
+.pet[data-state="sleep"]::after {
+  content: "z";
+  position: absolute;
+  right: 4%;
+  top: -8%;
+  font-family: var(--mono);
+  font-size: clamp(14px, calc(var(--pet-h, 104px) / 4), 26px);
+  font-weight: 700;
+  color: var(--muted);
+  animation: pet-z 2.6s ease-in-out infinite;
+}
+
+@keyframes pet-z {
+  0% { opacity: 0; transform: translateY(6px) scale(0.8); }
+  40% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-16px) scale(1.15); }
+}
+
+.pet-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 4px);
+  max-width: min(240px, 60vw);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: var(--glow);
+  opacity: 0;
+  transform: translateX(-50%) scale(0.9);
+  transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.33, 1, 0.68, 1);
+  pointer-events: none;
+}
+
+.pet-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
+.pet-bubble.is-on {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.pet-menu {
+  position: fixed;
+  z-index: 130;
+  min-width: 136px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgba(1, 4, 9, 0.28);
+  animation: fade-in 140ms ease-out;
+}
+
+.pet-menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pet-menu-item:hover,
+.pet-menu-item:focus-visible {
+  background: var(--surface-2);
+  color: var(--accent);
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  .pet-bubble {
+    font-size: 13px;
+  }
 }
 
 /* ---------- Contribute ---------- */
@@ -2100,7 +2542,8 @@ code {
   }
 
   .mobile-nav a,
-  .mobile-nav-upload {
+  .mobile-nav-upload,
+  .mobile-nav-toggle {
     display: flex;
     align-items: center;
     gap: var(--sp-3);
@@ -2124,7 +2567,8 @@ code {
   }
 
   .mobile-nav-icon svg,
-  .mobile-nav-upload svg {
+  .mobile-nav-upload svg,
+  .mobile-nav-toggle svg {
     display: block;
     width: 18px;
     height: 18px;
@@ -2132,7 +2576,8 @@ code {
 
   .mobile-nav a:hover,
   .mobile-nav a:focus-visible,
-  .mobile-nav-upload:hover {
+  .mobile-nav-upload:hover,
+  .mobile-nav-toggle:hover {
     background: var(--surface-2);
     color: var(--accent);
   }

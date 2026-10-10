@@ -8,6 +8,8 @@
 | :--- | :--- |
 | 页面结构和文案 | `index.html` |
 | 布局、主题和样式 | `assets/css/style.css`；参照[前端样式参考](../github-design-system-analysis.md) |
+| 界面图标 | `assets/js/icons.js` |
+| 奶蛙主题的背景眼睛 | `index.html` 的 `.naiwa-backdrop`、`assets/css/style.css` 的图标段 |
 | 站内文档页和 Markdown 渲染 | `docs.html`、`assets/js/docs.js`、`assets/js/md.js`、`assets/css/docs.css` |
 | 数据加载、路由、分页和页面交互 | `assets/js/app.js` |
 | 标签解析、搜索和筛选 | `assets/js/search.js` |
@@ -59,11 +61,12 @@ node tests/md.test.js
   {
     "id": "naiwa",
     "name": "奶蛙",
-    "icon": "🍼🐸",
+    "icon": "tabler:baby-bottle lucide-lab:frog-face",
     "subcategories": [
       { "id": "animated", "name": "动图", "file": "naiwa/animated.json" },
       { "id": "static", "name": "静态图", "file": "naiwa/static.json" }
-    ]
+    ],
+    "voice": "naiwa/voice.json"
   }
 ]
 ```
@@ -72,6 +75,31 @@ node tests/md.test.js
 - 角色 ID 在整个 manifest 中唯一；分类 ID 在同一角色内唯一。ID 使用小写英文、数字和单个连字符分隔，例如 `naiwa`、`new-role`。
 - 角色目录为 `data/<role-id>/`。`file` 是相对 `data/` 的 `.json` 路径，必须在该角色目录内；分类文件都要在 manifest 中登记。
 - 默认从第一个分类文件所在目录读取 `tags.json`。也可以在角色对象的 `tags` 字段中指定相对 `data/` 的标签文件路径。
+- `voice` 可选，指向该角色的语音文件；没有语音的角色省略该字段。
+- `icon` 可选，是 `assets/js/icons.js` 里登记的图标名，多个名字用空格分隔，侧栏和角色简介会按顺序渲染。图标名写错时校验器报错，前端则渲染为空；界面不使用 emoji。
+
+### 界面图标：`assets/js/icons.js`
+
+站内图标统一用 SVG，路径取自 [Iconify](https://icon-sets.iconify.design/) 的 lucide、lucide-lab（ISC）与 tabler（MIT）集合，随仓库内联，不引入运行时依赖或 CDN。所有图标都是 24×24 视窗、`stroke="currentColor"`，颜色跟随文字色。
+
+```html
+<span data-icon="lucide:search" data-icon-size="40"></span>
+```
+
+- 静态 HTML 写 `data-icon` 宿主，页面脚本启动时由 `NaiIcons.hydrate()` 填充；JS 拼 HTML 用 `NaiIcons.svg(name, size)`，角色 `icon` 这类多图标字段用 `NaiIcons.markup(value, size)`。
+- 新增图标：从 `https://api.iconify.design/<集合>.json?icons=<名字>` 取 `body`，按 `"集合:名字"` 登记进 `REGISTRY`，同时更新校验器可识别的图标名。
+- `scripts/validate_data.py` 会读取该文件里的图标名来校验角色 `icon`，所以注册表的键名保持 `"前缀:名字":` 一行的写法。
+
+### 奶蛙主题背景
+
+`index.html` 在 `<body>` 开头放了 `<div class="naiwa-backdrop">`，里面是一只奶蛙眼的内联 SVG，只在 `data-theme="naiwa"` 下显示，常驻视口右侧。图形按投稿 GIF 的比例量出来重画：绿圈用 `r=122` 加 `stroke-width=40` 的描边圆，瞳孔 `r=102`，两处高光和左下的嘴都是描边路径；嘴沿 GIF 一样被画框左边裁掉一截，不收端点。
+
+- 画入靠 `pathLength="1"` 把描边长度归一，再用 `stroke-dashoffset: 1 → 0` 做，不需要事先量路径长度；顺序是绿圈 → 瞳孔 → 高光 → 嘴，全部在 2.6 秒内画完。
+- 眨眼是上下裁切，不是压扁：两层 `<clipPath>` 矩形把 `y` / `height` 从整只眼睛（`243` / `314`）收到过中心的横缝（`376` / `48`），周期互质（6.5s 与 11s）叠加后间隔不固定；入场结束后才开始，不做整段循环重播。嘴在裁剪组之外，眨不眨都在。
+- 图层 `position: fixed` 加 `z-index: 0`，不用混合模式，只压在平涂的页面底色之上；首屏拼图（`z-index: 1`–`5`）、表情卡片、顶栏这些自带不透明底板的组件都画在它上面。没有底板的文字层单独抬到 `z-index: 1`：`.hero-copy`、`.sidebar`、`.toolbar`、`.tag-panel`、`.role-intro`、`.pager`、`.empty-state`、`.contribute`、`.site-footer`。
+- 四个图元的不透明度都是 1，颜色照 GIF 实测值平涂：绿圈 `#6dfe0c`、瞳孔和嘴 `#000`、高光 `#fff`。眼睛画在所有组件底下，实测 185 个文本框的最坏对比度相对"关掉眼睛"最多只差 0.13，所以不必为了文字压淡；改浓淡、尺寸或层序后仍要按没有底板的元素（角色简介、结果计数、标签行标题、页脚）复核。
+- 奶蛙主题的首屏是平涂奶黄：`:root[data-theme="naiwa"] .hero-aurora` 设成 `display: none`，`body` 也不加径向光斑。这两层会在眼睛底下叠出色块，还会被 `.hero { overflow: hidden }` 切出硬边，眼睛压在上方就会跟着深浅不匀，看着像眼睛自己发花。
+- `prefers-reduced-motion: reduce` 时不画入也不眨，直接呈现睁开的眼睛；窄屏 700px 以下不显示。
 
 ### 表情记录：分类文件
 
@@ -86,6 +114,43 @@ node tests/md.test.js
 ```
 
 `title` 和 `url` 是非空字符串；`tags` 按下面的标签规则填写。修订已有表情时修改原条目，并保留已有来源信息。
+
+### 角色语音：`voice.json`
+
+语音文件是 JSON 数组，每条记录一段可播放的语音；没有语音时填写 `[]`。
+
+```json
+{ "text": "咳哈哈哈哈~", "src": "assets/audio/nailong_laugh.mp3" }
+```
+
+- `text` 是播放时配着的台词文字，`src` 是音频相对站点根目录的路径，必须指向 `assets/audio/` 下已存在的文件；同一文件中的 `src` 不能重复。
+- 音频由主仓库提供，不走投稿区。新增语音先把文件放进 `assets/audio/`，再在角色的语音文件中登记。
+- 语音不单独成区：在页面空白处点右键有几率随机播放当前角色的一条语音，桌宠说话也从这批记录里取台词和音频。角色没有登记语音时，右键彩蛋回落到 `assets/audio/nailong_laugh.mp3`。
+
+### 桌宠：`data/pet.json`
+
+```json
+{
+  "sheet": "assets/pet/naifrog-sheet.webp",
+  "frameWidth": 192,
+  "frameHeight": 208,
+  "columns": 8,
+  "rows": 9,
+  "size": 104,
+  "animations": [
+    { "id": "idle", "row": 0, "durations": [280, 110, 110, 140, 140, 320] },
+    { "id": "walk-right", "row": 1, "durations": [120, 120, 120, 120, 120, 120, 120, 220] }
+  ]
+}
+```
+
+雪碧图按 petdex 规格排列：8 列、每帧 192×208，一行一个动作，逐帧给出停留毫秒数。9 行依次是 idle、walk-right、walk-left、talk、cheer、sleep、wait、run、review；`grab` 复用第 4 行（cheer）。
+
+- `sheet` 指向 `assets/` 下已存在的图片；`frameWidth`、`frameHeight`、`columns`、`rows` 是正整数；`animations` 非空，`id` 用小写 slug 且不重复，必须有 `idle`，`row` 小于 `rows`，帧数不超过 `columns`。`size` 是显示高度，取 24–400 像素。
+- 走路朝向由 `walk-right` / `walk-left` 两行素材提供，不做镜像翻转；呼吸、迈步摆动和落地挤压由 CSS 叠加。
+- 桌宠说话取当前角色 `voice.json` 里的随机一条，台词和音频都不另外维护。
+- 雪碧图取自 [`timerring/codex-pet-naiwa`](https://github.com/timerring/codex-pet-naiwa)（MIT），转成 WebP 后放进 `assets/pet/`；属主仓库资源，不走社区 Fork 图片链路。
+- 缺少 `data/pet.json`、缺 `idle` 或用户关掉桌宠时，页面不显示桌宠；关闭状态记在 `localStorage` 的 `nai-pet-off`，由顶栏「桌宠」按钮唤出。
 
 ### 标签：`tags.json`
 

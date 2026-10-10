@@ -409,7 +409,11 @@ class DataEditor:
         window.columnconfigure(0, weight=1)
         window.rowconfigure(0, weight=1)
         tree = ttk.Treeview(window, columns=("id", "name", "icon"), show="headings", selectmode="browse")
-        for column, label, width in (("id", "ID", 150), ("name", "名称", 220), ("icon", "图标", 100)):
+        for column, label, width in (
+            ("id", "ID", 150),
+            ("name", "名称", 220),
+            ("icon", "图标名（icons.js）", 190),
+        ):
             tree.heading(column, text=label)
             tree.column(column, width=width)
         tree.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=10, pady=10)
@@ -440,7 +444,7 @@ class DataEditor:
         form.transient(parent)
         form.grab_set()
         fields = {}
-        labels = (("id", "角色 ID"), ("name", "名称"), ("icon", "图标"), ("desc", "说明"))
+        labels = (("id", "角色 ID"), ("name", "名称"), ("icon", "图标名"), ("desc", "说明"))
         for row, (key, label) in enumerate(labels):
             ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=10, pady=6)
             variable = tk.StringVar(value=str((role or {}).get(key, "")))

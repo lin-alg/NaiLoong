@@ -13,6 +13,8 @@
 
   const el = {};
   const cache = new Map();
+  // icons.js 没加载时按空图标处理，文档正文照常渲染。
+  const ICONS = window.NaiIcons || { svg: () => "", markup: () => "", hydrate: () => {} };
   let currentId = null;
 
   function $(id) {
@@ -35,17 +37,23 @@
   }
 
   function applyTheme(mode) {
-    document.documentElement.dataset.theme = mode;
-    storageSet("nai-theme", mode);
-    const icons = { auto: "🌗", light: "☀️", dark: "🌙" };
-    const names = { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色" };
-    el.themeIcon.textContent = icons[mode] || icons.auto;
-    el.themeToggle.title = names[mode] || names.auto;
-    el.themeToggle.setAttribute("aria-label", names[mode] || names.auto);
+    const icons = {
+      auto: "lucide:sun-moon",
+      light: "lucide:sun",
+      dark: "lucide:moon",
+      naiwa: "tabler:baby-bottle"
+    };
+    const names = { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色", naiwa: "主题：奶蛙" };
+    const theme = names[mode] ? mode : "auto";
+    document.documentElement.dataset.theme = theme;
+    storageSet("nai-theme", theme);
+    el.themeIcon.innerHTML = ICONS.svg(icons[theme], 18);
+    el.themeToggle.title = names[theme];
+    el.themeToggle.setAttribute("aria-label", names[theme]);
   }
 
   function cycleTheme() {
-    const order = ["auto", "dark", "light"];
+    const order = ["auto", "dark", "light", "naiwa"];
     const next = order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length];
     applyTheme(next);
   }
@@ -173,6 +181,7 @@
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
 
+    ICONS.hydrate(document);
     applyTheme(storageGet("nai-theme") || "auto");
     el.themeToggle.addEventListener("click", cycleTheme);
     window.addEventListener("hashchange", route);

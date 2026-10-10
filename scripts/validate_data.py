@@ -14,6 +14,9 @@ MARKDOWN_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 COMMIT_SHA = re.compile(r"[0-9a-f]{40}\Z", re.IGNORECASE)
 COMPACT_IMAGE_URL = re.compile(r"([A-Za-z0-9-]+)/([0-9a-f]{40})/(.+)\Z", re.IGNORECASE)
+ICON_KEY = re.compile(r'^\s*"([a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*)"\s*:', re.MULTILINE)
+ICON_SPLIT = re.compile(r"[\s,]+")
+ICONS_SOURCE = "assets/js/icons.js"
 INVALID = object()
 
 
@@ -31,6 +34,15 @@ def _display_path(path: Path, root: Path) -> str:
         return path.relative_to(root).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _icon_names(root: Path) -> set[str]:
+    """Read the registered icon names from the frontend icon registry."""
+    try:
+        source = (root / ICONS_SOURCE).read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(ICON_KEY.findall(source))
 
 
 def validate_data(root: Path | str) -> list[str]:
@@ -113,6 +125,8 @@ def validate_data(root: Path | str) -> list[str]:
             return None
         return path
 
+    registered_icons = _icon_names(root)
+
     for role_index, role in enumerate(manifest):
         owner = f"data/manifest.json role #{role_index}"
         if not isinstance(role, dict):
@@ -132,6 +146,16 @@ def validate_data(root: Path | str) -> list[str]:
 
         if not isinstance(role.get("name"), str) or not role["name"].strip():
             errors.append(f"{owner}: needs a non-empty string name")
+
+        icon = role.get("icon")
+        if icon is not None and not isinstance(icon, str):
+            errors.append(f"{owner}: icon must be a string of icon names")
+        elif isinstance(icon, str) and icon.strip() and registered_icons:
+            for token in ICON_SPLIT.split(icon.strip()):
+                if token and token not in registered_icons:
+                    errors.append(
+                        f"{owner}: icon {token!r} is not registered in {ICONS_SOURCE}"
+                    )
 
         categories = role.get("subcategories")
         if not isinstance(categories, list) or not categories:
@@ -206,6 +230,28 @@ def validate_data(root: Path | str) -> list[str]:
                     else:
                         seen_urls[normalized_url] = entry_owner
 
+        voice_value = role.get("voice")
+        if voice_value is not None:
+            voice_path = resolve_data_file(voice_value, owner, "voice")
+            if voice_path is not None:
+                if role_id and voice_path.parent.name != role_id:
+                    errors.append(
+                        f"{owner}: voice file must be inside data/{role_id}/; "
+                        f"found data/{voice_path.parent.name}/"
+                    )
+                if not voice_path.is_file():
+                    errors.append(
+                        f"{owner}: voice file not found: {_display_path(voice_path, root)}"
+                    )
+                else:
+                    referenced_entries.add(voice_path)
+                    _validate_voice_entries(
+                        loaded.get(voice_path, INVALID),
+                        _display_path(voice_path, root),
+                        root,
+                        errors,
+                    )
+
         if role_id and category_paths:
             tags_value = role.get("tags")
             if tags_value is None:
@@ -249,9 +295,13 @@ def validate_data(root: Path | str) -> list[str]:
                                     errors,
                                 )
 
+    pet_path = (data_dir / "pet.json").resolve()
+    if pet_path.is_file():
+        _validate_pet(loaded.get(pet_path, INVALID), root, errors)
+
     for path in json_files:
         resolved = path.resolve()
-        if path.name in {"manifest.json", "tags.json", "tag-translations.json"}:
+        if path.name in {"manifest.json", "tags.json", "tag-translations.json", "pet.json"}:
             continue
         if resolved not in referenced_entries:
             errors.append(f"{_display_path(path, root)}: entry file is not referenced by manifest")
@@ -373,6 +423,130 @@ def _validate_url(value, owner, root, errors):
         return None
 
     return f"https://github.com/{owner_name.lower()}/NaiLoong/blob/{commit}/{parts.as_posix()}"
+
+
+def _validate_pet(value, root, errors):
+    owner = "data/pet.json"
+    if value is INVALID:
+        return
+    if not isinstance(value, dict):
+        errors.append(f"{owner}: expected a JSON object")
+        return
+
+    size = value.get("size")
+    if size is not None and (
+        isinstance(size, bool) or not isinstance(size, (int, float)) or not 24 <= size <= 400
+    ):
+        errors.append(f'{owner}: "size" must be a number between 24 and 400')
+
+    sheet = value.get("sheet")
+    if not isinstance(sheet, str) or not sheet.strip():
+        errors.append(f'{owner}: "sheet" must be a non-empty path inside assets/')
+    else:
+        _validate_asset_src(sheet, owner, root, errors, "sheet", "assets/")
+
+    def positive_int(field):
+        number = value.get(field)
+        if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+            errors.append(f'{owner}: "{field}" must be a positive integer')
+            return None
+        return number
+
+    columns = positive_int("columns")
+    rows = positive_int("rows")
+    positive_int("frameWidth")
+    positive_int("frameHeight")
+
+    animations = value.get("animations")
+    if not isinstance(animations, list) or not animations:
+        errors.append(f'{owner}: "animations" must be a non-empty array')
+        return
+
+    seen = set()
+    for index, animation in enumerate(animations):
+        entry_owner = f"{owner} animation #{index}"
+        if not isinstance(animation, dict):
+            errors.append(f"{entry_owner}: expected an object")
+            continue
+
+        anim_id = animation.get("id")
+        if not isinstance(anim_id, str) or not SLUG.fullmatch(anim_id):
+            errors.append(f"{entry_owner}: id must be a lowercase slug")
+        elif anim_id in seen:
+            errors.append(f"{entry_owner}: duplicate animation id {anim_id!r}")
+        else:
+            seen.add(anim_id)
+
+        row = animation.get("row")
+        if isinstance(row, bool) or not isinstance(row, int) or row < 0:
+            errors.append(f'{entry_owner}: "row" must be a non-negative integer')
+        elif rows is not None and row >= rows:
+            errors.append(f"{entry_owner}: row {row} is outside the {rows}-row sheet")
+
+        durations = animation.get("durations")
+        if not isinstance(durations, list) or not durations:
+            errors.append(f'{entry_owner}: "durations" must be a non-empty array of milliseconds')
+            continue
+        if any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 1 or item > 3000
+            for item in durations
+        ):
+            errors.append(f'{entry_owner}: every duration must be 1-3000 milliseconds')
+        if columns is not None and len(durations) > columns:
+            errors.append(
+                f"{entry_owner}: {len(durations)} frames exceed the {columns} sheet columns"
+            )
+
+    if "idle" not in seen:
+        errors.append(f'{owner}: "animations" must include an idle animation')
+
+
+def _validate_voice_entries(value, owner, root, errors):
+    if value is INVALID:
+        return
+    if not isinstance(value, list):
+        errors.append(f"{owner}: voice file must contain a JSON array")
+        return
+
+    seen_sources = set()
+    for entry_index, entry in enumerate(value):
+        entry_owner = f"{owner} voice #{entry_index}"
+        if not isinstance(entry, dict):
+            errors.append(f"{entry_owner}: expected an object")
+            continue
+
+        text = entry.get("text")
+        if not isinstance(text, str) or not text.strip():
+            errors.append(f'{entry_owner}: "text" must be a non-empty string')
+
+        source = entry.get("src")
+        if not isinstance(source, str) or not source.strip():
+            errors.append(f'{entry_owner}: "src" must be a non-empty path inside assets/audio/')
+            continue
+        if source in seen_sources:
+            errors.append(f"{entry_owner}: duplicate voice src {source!r}")
+            continue
+        seen_sources.add(source)
+        _validate_asset_src(source, entry_owner, root, errors, "src", "assets/audio/")
+
+
+def _validate_asset_src(value, owner, root, errors, field, prefix):
+    """Check a repo-relative path under `prefix` and confirm the file exists."""
+    if not value.startswith(prefix):
+        errors.append(f'{owner}: "{field}" must point inside {prefix}: {value!r}')
+        return
+    local_path = PurePosixPath(value)
+    if ".." in local_path.parts or "\\" in value:
+        errors.append(f'{owner}: {field} path must stay inside {prefix}: {value!r}')
+        return
+    target = (root / Path(*local_path.parts)).resolve()
+    try:
+        target.relative_to((root / Path(*PurePosixPath(prefix).parts)).resolve())
+    except ValueError:
+        errors.append(f'{owner}: {field} path must stay inside {prefix}: {value!r}')
+        return
+    if not target.is_file():
+        errors.append(f"{owner}: {field} file not found: {value}")
 
 
 def _validate_tag_definitions(value, owner, errors):

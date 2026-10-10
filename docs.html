@@ -16,15 +16,15 @@
   <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="index.html">
-        <span class="brand-mark" aria-hidden="true">🍼</span>
+        <span class="brand-mark" data-icon="tabler:baby-bottle" data-icon-size="20" aria-hidden="true"></span>
         <span class="brand-name">奶-hub</span>
         <span class="brand-sub">文档</span>
       </a>
 
       <div class="header-actions">
-        <a class="btn btn-ghost" href="index.html">← 返回表情库</a>
+        <a class="btn btn-ghost" href="index.html"><span data-icon="lucide:arrow-left" aria-hidden="true"></span><span>返回表情库</span></a>
         <button id="themeToggle" class="btn btn-ghost icon-btn" type="button" aria-label="切换配色主题" title="切换配色主题">
-          <span id="themeIcon" aria-hidden="true">🌗</span>
+          <span id="themeIcon" data-icon="lucide:sun-moon" aria-hidden="true"></span>
         </button>
       </div>
     </div>
@@ -38,7 +38,7 @@
 
     <div class="docs-content">
       <div class="docs-toolbar">
-        <a class="link docs-source" id="sourceLink" href="#" target="_blank" rel="noopener noreferrer" hidden>在 GitHub 上查看原文 ↗</a>
+        <a class="link docs-source" id="sourceLink" href="#" target="_blank" rel="noopener noreferrer" hidden>在 GitHub 上查看原文<span data-icon="lucide:arrow-up-right" aria-hidden="true"></span></a>
       </div>
       <article class="prose" id="docContent"></article>
     </div>
@@ -48,6 +48,7 @@
     <div class="noscript">本站需要启用 JavaScript 才能渲染文档。</div>
   </noscript>
 
+  <script src="assets/js/icons.js"></script>
   <script src="assets/js/md.js"></script>
   <script src="assets/js/docs.js"></script>
 </body>

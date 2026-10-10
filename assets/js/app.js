@@ -6,6 +6,7 @@
     dataBase: "data/",
     tagDimensions: "data/tag-translations.json",
     fallback: "assets/placeholders/fallback.gif",
+    petData: "data/pet.json",
     uploadUrl: "https://wplace-gallery.linalg.tech/api/images/upload"
   };
 
@@ -35,19 +36,24 @@
   };
   const cache = new Map();
   const context = { url: "", title: "", anchor: null };
-  let eggAudio = null;
-  let eggAudioSrc = "";
+  let voiceAudio = null;
+  let voiceAudioSrc = "";
+  let voicePlaying = "";
+
+  const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
+  const THEME_ICONS = {
+    auto: "lucide:sun-moon",
+    light: "lucide:sun",
+    dark: "lucide:moon",
+    naiwa: "tabler:baby-bottle"
+  };
+  const FALLBACK_ICON = "tabler:baby-bottle";
+  // icons.js 没加载时按空图标处理，页面其余功能不受影响。
+  const ICONS = window.NaiIcons || { svg: () => "", markup: () => "", hydrate: () => {} };
+  let previousTheme = "auto";
 
   const EASTER_EGG = {
-    defaultSrc: "assets/audio/nailong_laugh.mp3",
-    naiwaSources: [
-      "assets/audio/nailong_laugh.mp3",
-      "assets/audio/hola_ganbadie.mp3",
-      "assets/audio/gajiaosai.mp3",
-      "assets/audio/gagadilashui.mp3",
-      "assets/audio/dupu.mp3"
-    ],
-    naidanSrc: "assets/audio/andi.mp3",
+    fallbackSrc: "assets/audio/nailong_laugh.mp3",
     chance: 0.25,
     volume: 0.7
   };
@@ -277,6 +283,7 @@
     if (el.uploadDialog.open) return;
     if (typeof el.uploadDialog.showModal === "function") el.uploadDialog.showModal();
     else el.uploadDialog.setAttribute("open", "");
+    syncPetPause();
   }
 
   function setMobileMenu(open) {
@@ -292,13 +299,28 @@
     return cut;
   }
 
+  async function loadVoice(meta) {
+    if (!meta || !meta.voice) return [];
+    let items;
+    try {
+      items = await fetchJSON(CONFIG.dataBase + meta.voice);
+    } catch (err) {
+      return [];
+    }
+    if (!Array.isArray(items)) return [];
+    return items.filter((item) => item && typeof item.src === "string" && item.src.trim());
+  }
+
   async function loadChar(meta) {
-    const subEntries = await Promise.all(
-      (meta.subcategories || []).map(async (sub) => {
-        const items = await fetchJSON(CONFIG.dataBase + sub.file);
-        return [sub.id, { meta: sub, items: Array.isArray(items) ? items : [] }];
-      })
-    );
+    const [subEntries, voice] = await Promise.all([
+      Promise.all(
+        (meta.subcategories || []).map(async (sub) => {
+          const items = await fetchJSON(CONFIG.dataBase + sub.file);
+          return [sub.id, { meta: sub, items: Array.isArray(items) ? items : [] }];
+        })
+      ),
+      loadVoice(meta)
+    ]);
 
     let tagsJson = {};
     try {
@@ -322,7 +344,7 @@
       total += sub.items.length;
     });
 
-    return { meta, subs, tagIndex, total };
+    return { meta, subs, tagIndex, total, voice };
   }
 
   function currentChar() {
@@ -393,7 +415,7 @@
           esc(meta.id) +
           '">' +
           '<span class="side-icon" aria-hidden="true">' +
-          esc(meta.icon || "🍼") +
+          ICONS.markup(meta.icon || FALLBACK_ICON, 16) +
           "</span>" +
           '<span class="side-name">' +
           esc(meta.name) +
@@ -692,7 +714,8 @@
       return;
     }
     el.roleIntro.hidden = false;
-    el.roleIntro.textContent = (char.meta.icon ? char.meta.icon + " " : "") + desc;
+    const iconHtml = ICONS.markup(char.meta.icon || "", 16);
+    el.roleIntro.innerHTML = (iconHtml ? iconHtml + " " : "") + esc(desc);
   }
 
   function render() {
@@ -1041,6 +1064,7 @@
     image.src = url;
     if (window.GhImg) window.GhImg.decorate(image);
     el.imageDialog.showModal();
+    syncPetPause();
   }
 
   // 从当前（可能被搜索/标签筛选过的）结果里随机抽一张打开。
@@ -1078,20 +1102,42 @@
   }
 
   function applyTheme(mode) {
-    document.documentElement.dataset.theme = mode;
-    storageSet("nai-theme", mode);
-    const icons = { auto: "🌗", light: "☀️", dark: "🌙" };
-    const names = { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色" };
-    el.themeIcon.textContent = icons[mode] || icons.auto;
-    el.themeToggle.title = names[mode] || names.auto;
-    el.themeToggle.setAttribute("aria-label", names[mode] || names.auto);
+    const theme = THEME_NAMES[mode] ? mode : "auto";
+    if (theme !== "naiwa") {
+      previousTheme = theme;
+      storageSet("nai-theme-base", theme);
+    }
+    document.documentElement.dataset.theme = theme;
+    storageSet("nai-theme", theme);
+    el.themeIcon.innerHTML = ICONS.svg(THEME_ICONS[theme], 18);
+    el.themeToggle.title = "主题：" + THEME_NAMES[theme];
+    el.themeToggle.setAttribute("aria-label", "主题：" + THEME_NAMES[theme]);
+    setNaiwaButtons(theme === "naiwa");
+  }
+
+  function setNaiwaButtons(on) {
+    (el.naiwaToggles || []).forEach((node) => {
+      node.classList.toggle("is-on", on);
+      node.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function toggleNaiwaTheme() {
+    if (document.documentElement.dataset.theme === "naiwa") {
+      applyTheme(previousTheme);
+      toast("已切换主题：" + THEME_NAMES[previousTheme]);
+    } else {
+      applyTheme("naiwa");
+      toast("已切换主题：奶蛙");
+    }
   }
 
   function cycleTheme() {
-    const order = ["auto", "dark", "light"];
-    const next = order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length];
+    const order = ["auto", "dark", "light", "naiwa"];
+    const current = order.indexOf(document.documentElement.dataset.theme);
+    const next = order[(current + 1) % order.length];
     applyTheme(next);
-    toast("已切换主题：" + ({ auto: "跟随系统", dark: "深色", light: "浅色" })[next]);
+    toast("已切换主题：" + THEME_NAMES[next]);
   }
 
   function formatStars(n) {
@@ -1191,52 +1237,116 @@
     });
   }
 
-  function easterEggSource() {
-    if (state.charId === "naidan") return EASTER_EGG.naidanSrc;
-    if (state.charId === "naiwa") {
-      const sources = EASTER_EGG.naiwaSources;
-      return sources[Math.floor(Math.random() * sources.length)];
-    }
-    return EASTER_EGG.defaultSrc;
+  function syncPetPause() {
+    if (!window.NaiPet) return;
+    const modalOpen = (el.imageDialog && el.imageDialog.open) || (el.uploadDialog && el.uploadDialog.open);
+    window.NaiPet.setPaused(modalOpen);
   }
 
-  function primeEasterEgg(src) {
-    if (eggAudio || typeof Audio !== "function") return;
+  function syncPetButton() {
+    const off = !window.NaiPet || window.NaiPet.isHidden();
+    document.querySelectorAll("[data-pet-toggle]").forEach((node) => {
+      node.classList.toggle("is-on", !off);
+      node.setAttribute("aria-pressed", String(!off));
+      node.title = off ? "唤出奶蛙桌宠" : "让奶蛙躲起来";
+    });
+  }
+
+  function togglePet() {
+    if (!window.NaiPet) return;
+    if (window.NaiPet.isHidden()) window.NaiPet.show();
+    else window.NaiPet.hide();
+    syncPetButton();
+    toast(window.NaiPet.isHidden() ? "奶蛙躲起来了" : "奶蛙出来了");
+  }
+
+  async function startPet() {
+    if (!window.NaiPet) return;
+    let pet;
     try {
-      eggAudio = new Audio(src || EASTER_EGG.defaultSrc);
-      eggAudioSrc = src || EASTER_EGG.defaultSrc;
-      eggAudio.preload = "auto";
-      eggAudio.volume = EASTER_EGG.volume;
-      // 提前缓冲，首次触发听不出加载延迟。
-      eggAudio.load();
+      pet = await fetchJSON(CONFIG.petData);
     } catch (err) {
-      eggAudio = null;
-      eggAudioSrc = "";
+      return;
+    }
+    if (!pet || !pet.sheet || !Array.isArray(pet.animations) || !pet.animations.length) return;
+    const narrow = (window.innerWidth || 1024) < 600;
+    window.NaiPet.start({
+      sheet: pet.sheet,
+      frameWidth: pet.frameWidth,
+      frameHeight: pet.frameHeight,
+      columns: pet.columns,
+      rows: pet.rows,
+      animations: pet.animations,
+      size: Math.round((Number(pet.size) || 104) * (narrow ? 0.72 : 1)),
+      // 台词跟着当前角色走：奶蛙页说奶蛙话，奶蛋页只会“安~迪~”。
+      lines: voiceSources,
+      play: playVoiceSrc,
+      onHide: syncPetButton
+    });
+    syncPetButton();
+  }
+
+  function voiceSources() {
+    const char = currentChar();
+    return char && Array.isArray(char.voice) ? char.voice : [];
+  }
+
+  function stopVoice() {
+    voicePlaying = "";
+    if (voiceAudio) {
+      try {
+        voiceAudio.pause();
+      } catch (err) {
+      }
     }
   }
 
-  // 彩蛋：不弹提示、不打断操作，播放失败也保持静默。
-  function playEasterEgg() {
-    const src = easterEggSource();
-    if (eggAudioSrc !== src) {
-      if (eggAudio) {
+  function playVoiceSrc(src) {
+    if (!src || typeof Audio !== "function") return;
+    if (voiceAudioSrc !== src) {
+      if (voiceAudio) {
         try {
-          eggAudio.pause();
-          eggAudio.src = "";
+          voiceAudio.pause();
+          voiceAudio.src = "";
         } catch (err) {
         }
       }
-      eggAudio = null;
-      eggAudioSrc = "";
+      voiceAudio = new Audio();
+      voiceAudio.volume = EASTER_EGG.volume;
+      voiceAudio.addEventListener("ended", () => {
+        if (voicePlaying === src) stopVoice();
+      });
+      voiceAudio.addEventListener("error", () => {
+        if (voicePlaying === src) stopVoice();
+      });
+      voiceAudio.src = src;
+      voiceAudioSrc = src;
     }
-    primeEasterEgg(src);
-    if (!eggAudio) return;
+    voicePlaying = src;
     try {
-      eggAudio.currentTime = 0;
-      const playback = eggAudio.play();
-      if (playback && typeof playback.catch === "function") playback.catch(() => {});
+      voiceAudio.currentTime = 0;
+      const playback = voiceAudio.play();
+      // 浏览器拦截播放时保持静默，不弹提示。
+      if (playback && typeof playback.catch === "function") {
+        playback.catch(() => {
+          if (voicePlaying === src) stopVoice();
+        });
+      }
     } catch (err) {
+      if (voicePlaying === src) stopVoice();
     }
+  }
+
+  function easterEggSource() {
+    const sources = voiceSources();
+    if (!sources.length) return EASTER_EGG.fallbackSrc;
+    return sources[Math.floor(Math.random() * sources.length)].src;
+  }
+
+  // 彩蛋：不弹提示，不打断正在播放的语音，播放失败也保持静默。
+  function playEasterEgg() {
+    if (voicePlaying) return;
+    playVoiceSrc(easterEggSource());
   }
 
   function bindEvents() {
@@ -1371,6 +1481,18 @@
       openContextMenu(event, target);
     });
 
+    (el.naiwaToggles || []).forEach((node) => {
+      node.addEventListener("click", toggleNaiwaTheme);
+    });
+
+    document.querySelectorAll("[data-pet-toggle]").forEach((node) => {
+      node.addEventListener("click", togglePet);
+    });
+
+    [el.imageDialog, el.uploadDialog].forEach((dlg) => {
+      dlg.addEventListener("close", syncPetPause);
+    });
+
     // 页面任意位置右键都有机会触发彩蛋，和图片菜单互不影响。
     document.addEventListener("contextmenu", () => {
       if (Math.random() < EASTER_EGG.chance) playEasterEgg();
@@ -1488,6 +1610,7 @@
   }
 
   async function init() {
+    ICONS.hydrate(document);
     el.searchForm = $("searchForm");
     el.searchInput = $("searchInput");
     el.randomBtn = $("randomBtn");
@@ -1507,6 +1630,7 @@
     el.toast = $("toast");
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
+    el.naiwaToggles = Array.from(document.querySelectorAll("[data-naiwa-toggle]"));
     el.mobileMenuToggle = $("mobileMenuToggle");
     el.mobileNav = $("mobileNav");
     el.uploadDialog = $("uploadDialog");
@@ -1536,6 +1660,7 @@
     if (PAGE_SIZES.includes(storedSize)) state.pageSize = storedSize;
 
     applyRepoLinks();
+    previousTheme = storageGet("nai-theme-base") || "auto";
     applyTheme(storageGet("nai-theme") || "auto");
     if (window.GhImg) {
       window.GhImg.configure({ repo: CONFIG.repo });
@@ -1543,9 +1668,9 @@
       window.GhImg.start();
     }
     bindEvents();
-    primeEasterEgg();
     setupReveal();
     loadStars();
+    startPet();
     el.grid.innerHTML = skeletonMarkup(8);
 
     try {

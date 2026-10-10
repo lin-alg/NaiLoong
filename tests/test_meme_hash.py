@@ -689,6 +689,22 @@ class PullRequestReadingTests(unittest.TestCase):
         with self.assertRaisesRegex(meme_hash.BotError, "read failed"):
             meme_hash.new_data_urls(github, pr)
 
+    def test_voice_and_pet_files_are_not_read_as_entries(self):
+        sha = "a" * 40
+        github = Mock()
+        github.get_pr_files.return_value = [
+            {"filename": "data/manifest.json", "status": "modified"},
+            {"filename": "data/naiwa/voice.json", "status": "added"},
+            {"filename": "data/naiwa/tags.json", "status": "modified"},
+            {"filename": "data/pet.json", "status": "added"},
+        ]
+        pr = {
+            "number": 9, "base": {"sha": "b" * 40},
+            "head": {"sha": sha, "repo": {"full_name": "contributor/NaiLoong"}},
+        }
+        self.assertEqual(meme_hash.new_data_urls(github, pr), [])
+        github.pr_file_json.assert_not_called()
+
     def test_pr_head_changed_during_file_listing_fails(self):
         github = self.github()
         github.paginated = Mock(return_value=[])

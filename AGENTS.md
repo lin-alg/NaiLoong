@@ -10,6 +10,7 @@
 - 网站是零构建静态站点。未经明确需要，不要引入前端框架、包管理器、构建步骤或运行时依赖。
 - 角色、分类和表情由 `data/` 驱动；不要为了新增角色或分类而在 `assets/js/app.js` 或 `index.html` 写死数据。
 - 低门槛表情投稿走共享 Issue 评论区；网站/项目建议与问题反馈走普通 Issue；GitHub 新手通过 Fork、工作分支和 JSON PR 投稿；项目代码改动保持范围聚焦。
+- 奶蛙主题的背景眼睛是 `index.html` 里的内联 SVG（`.naiwa-backdrop`），`position: fixed` 加 `z-index: 0`，只压在页面底色之上，不用混合模式；拼图、卡片、顶栏这些自带底板的组件画在它上面，没有底板的文字层单独抬到它之上。眨眼用 `<clipPath>` 矩形的 `y`/`height` 做上下裁切，不用 `scaleY` 压扁。奶蛙主题底色保持平涂奶黄，不加 `body` 径向光斑和首屏 `.hero-aurora` 光晕：它们会在眼睛底下叠出色块和被 `.hero` 裁切的硬边。改浓淡或层序后要按角色简介、计数、页脚这类没有底板的小字复核对比度。
 - 共享投稿 Issue 固定为 `https://github.com/lin-alg/NaiLoong/issues/1`，GitHub 标签名称为「贡献表情」。仅投稿者直接在评论中上传图片；整理投稿的贡献者或维护者再将图片转存到自己的公开 `image` 分支。
 - 社区图片放在贡献者自己的公开 Fork 的 `image` 分支。不要把该分支合并进主仓库，也不要建议贡献者删除或私有化承载本站图片的 Fork。
 - 修订既有数据时优先修改原条目；不得丢失已记录的来源信息。相同 URL 不重复新增。
@@ -36,6 +37,7 @@
 - `index.html`：网站主页面骨架、导航和文案。
 - `docs.html`：站内文档阅读器页面，搭配 `assets/js/docs.js` 与 `assets/css/docs.css`；把 `docs/` 和 `CONTRIBUTING.md` 渲染成网页。
 - `assets/css/`：设计参考 `github-design-system-analysis.md`。
+- `assets/js/icons.js`：站内 UI 图标注册表，SVG 路径取自 Iconify 的 lucide、lucide-lab 与 tabler 集合并内联在仓库里；界面不使用 emoji。
 - `assets/js/app.js`：加载 manifest 和数据，渲染页面、路由和交互。
 - `assets/js/search.js`：标签定义解析、搜索和筛选语义。
 - `assets/js/ghimg.js`：GitHub 图片链接转换、代理探测和失败回退。
@@ -44,7 +46,11 @@
 - `preview` 分支的 `previews/`：主仓库 Action 生成的轻量 WebP 预览图；不在 `main` 的数据 PR 中提交。
 - `data/manifest.json`：角色和分类目录。
 - `data/tag-translations.json`：标签维度的中英文显示名；不在前端代码中硬编码维度译名。
-- `data/<role-id>/`：该角色的分类文件及 `tags.json`。
+- `data/<role-id>/`：该角色的分类文件、`tags.json` 和可选的 `voice.json`。
+- `assets/audio/`：主仓库提供的角色语音音频，由 `data/<role-id>/voice.json` 登记。
+- `assets/pet/`：桌宠雪碧图，取自 `timerring/codex-pet-naiwa`（MIT）的奶蛙素材并按 petdex 规格排列；属主仓库资源，不走社区 Fork 图片链路。
+- `data/pet.json`：桌宠的动作到素材映射和显示尺寸；缺文件或缺 `idle` 时页面不渲染桌宠。
+- `assets/js/pet.js`：零依赖网页桌宠，负责动作状态机、拖拽甩抛物理和说话气泡。
 - `hash.txt`：主分支已归档图片的 SHA-256 哈希，每行一个哈希值；不写图片 URL 或键值。
 - `.github/ISSUE_TEMPLATE/`：网站或项目建议、问题反馈模板及共享投稿 Issue 入口。
 - `.github/workflows/`：PR 测试/数据校验和 GitHub Pages 部署。
@@ -59,13 +65,16 @@
 ## 数据契约
 
 - `data/manifest.json` 是非空数组。每个角色含唯一、非空 `id` 和非空 `name`，至少有一个分类。角色和分类 ID 使用小写英文、数字及连字符；角色目录名与角色 ID 相同。
+- 角色可选的 `icon` 是 `assets/js/icons.js` 中登记的图标名（形如 `lucide:paw-print`），多个名字用空格分隔；不使用 emoji，未登记的名字会被校验器拒绝且在前端渲染为空。新增界面图标先把 Iconify 的 SVG 路径加进注册表。
 - `subcategories[].file` 是相对 `data/` 的 `.json` 分类文件路径，必须位于对应角色目录下。分类 ID 在同一角色内唯一，分类名称非空。
 - 每个分类文件是 JSON 数组；数组中每一项是对象，包含非空 `title`、非空 `url` 和 `tags`。
 - `tags.json` 是有序 JSON 对象。顶层键为标签维度，维度值是“维度内标签序号 → 标签文字”的对象。维度书写顺序决定 `tags` 数组位置；维度内部的整数序号不做跨维度展平。
 - `tags` 数组必须恰有一个元素对应每个标签维度，按维度顺序填写非负本地整数序号；未知维度使用 JSON `null`。例如 `[2, null, 0]` 表示第一维取本地序号 2、第二维未知、第三维取本地序号 0。
 - `tags` 也允许对象写法 `{ "维度名": 本地整数序号或标签文字或 null }`，适合强调维度名或只记录部分维度。未知维度名和未定义的序号/标签文字均无效。
 - 当前项目的常规分类为 `animated`（动图）和 `static`（静态图）；数据结构不在校验器中硬编码只允许这两个分类。极短视频应转换成 GIF；较长视频不收录。
+- 角色语音由可选的 `data/<role-id>/voice.json` 驱动：数组每项含非空 `text` 和 `src`，`src` 必须指向 `assets/audio/` 下已存在的文件，同一文件内 `src` 不重复。语音不单列成页面区域，只在页面右键彩蛋和桌宠说话时随机取一条播放；角色无语音时彩蛋回落到 `EASTER_EGG.fallbackSrc`。不在 `app.js` 或 `index.html` 写死音频列表。
 - 新投稿 `url` 必须指向贡献者公开 Fork 中图片上传 commit 的 `NaiLoong/blob/<40位commit-sha>/<path>`、紧凑格式 `<fork-owner>/<40位commit-sha>/<path>` 或同一文件的 GitHub RAW URL。校验器把等价地址归一后检查重复。禁止使用会随分支后续提交改变内容的 `image` 分支 URL。校验器只校验 URL 结构，不联网请求图片；本地 `assets/placeholders/` 下已存在的占位资源例外保留。
+- 桌宠由可选的 `data/pet.json` 驱动：`sheet` 指向 `assets/` 下已存在的雪碧图；`frameWidth`、`frameHeight`、`columns`、`rows` 为正整数；`animations` 是非空数组，每项含唯一小写 `id`、小于 `rows` 的 `row` 和逐帧 `durations`（每项 1–3000 毫秒，帧数不超过 `columns`），必须包含 `idle`；`size` 可选，取值 24–400 像素。桌宠的台词和音频复用当前角色的 `voice.json`，不在 `pet.js` 中写死素材或台词。
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
 - 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存，失败时保留旧缓存以便下次恢复。预占位代表仍有效的待处理图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`，写入成功后清理 `ingested` 临时记录。待处理评论换图或清空时回收旧占位；删除未认领评论时释放占位；已认领评论删除后保留占位并标记为已删除，直到对应 PR 合并或关闭；未合并关闭 PR 时保留仍存在的 Issue 投稿占位并解除认领，纯 PR 占位释放供重新检查。
 - 单张投稿图片严格小于或等于 5 MB；鼓励压到 2 MB 以下。数据校验器本身不下载 Fork 图片；`meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件来执行 5 MB 检查。
