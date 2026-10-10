@@ -39,7 +39,6 @@
   let voiceAudio = null;
   let voiceAudioSrc = "";
   let voicePlaying = "";
-  let voiceRenderKey = "";
 
   const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
   const THEME_ICONS = { auto: "🌗", light: "☀️", dark: "🌙", naiwa: "🍼" };
@@ -59,9 +58,6 @@
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25Zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0Z"/></svg>';
   const ICON_MARKDOWN =
     '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M14.85 3c.63 0 1.15.52 1.15 1.15v7.7c0 .63-.52 1.15-1.15 1.15H1.15c-.63 0-1.15-.52-1.15-1.15v-7.7C0 3.52.52 3 1.15 3ZM9 11v-4H7v4H5.5L8 13.5 10.5 7H9Zm4.5 0h-2V6h-2v5h-2l3 3.5 3-3.5Z"/></svg>';
-
-  const ICON_PLAY =
-    '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>';
 
   const CTX_ACTIONS = [
     { action: "download", label: "下载图片", icon: ICON_DOWNLOAD },
@@ -713,55 +709,9 @@
     el.roleIntro.textContent = (char.meta.icon ? char.meta.icon + " " : "") + desc;
   }
 
-  function voiceBubbleMarkup(item, char) {
-    const text = item.text && String(item.text).trim() ? String(item.text).trim() : "语音";
-    return (
-      '<button class="voice-bubble" type="button" aria-pressed="false"' +
-      ' data-src="' +
-      esc(item.src) +
-      '" aria-label="' +
-      esc((char.meta.name || "角色") + "语音：" + text) +
-      '">' +
-      '<span class="voice-avatar" aria-hidden="true">' +
-      esc(char.meta.icon || "🍼") +
-      "</span>" +
-      '<span class="voice-bubble-body">' +
-      '<span class="voice-text">' +
-      esc(text) +
-      "</span>" +
-      '<span class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span>' +
-      '<span class="voice-play" aria-hidden="true">' +
-      ICON_PLAY +
-      "</span>" +
-      "</span></button>"
-    );
-  }
-
-  function renderVoice() {
-    if (!el.voiceSection || !el.voiceList) return;
-    const char = currentChar();
-    const items = voiceSources();
-    if (!char || !items.length) {
-      el.voiceSection.hidden = true;
-      el.voiceList.innerHTML = "";
-      voiceRenderKey = "";
-      return;
-    }
-    // 列表内容没变时不重建节点，避免搜索和翻页打断正在跑的播放动画。
-    const key = char.meta.id + "|" + items.map((item) => item.src + "=" + (item.text || "")).join("|");
-    el.voiceSection.hidden = false;
-    el.voiceTitle.textContent = (char.meta.name || "角色") + "语音";
-    if (key !== voiceRenderKey) {
-      el.voiceList.innerHTML = items.map((item) => voiceBubbleMarkup(item, char)).join("");
-      voiceRenderKey = key;
-    }
-    markVoicePlaying();
-  }
-
   function render() {
     renderSidebar();
     renderIntro();
-    renderVoice();
     renderTabs();
     renderTagPanel();
     renderGrid();
@@ -1332,15 +1282,6 @@
     return char && Array.isArray(char.voice) ? char.voice : [];
   }
 
-  function markVoicePlaying() {
-    if (!el.voiceList) return;
-    el.voiceList.querySelectorAll(".voice-bubble").forEach((bubble) => {
-      const on = !!voicePlaying && bubble.dataset.src === voicePlaying;
-      bubble.classList.toggle("is-playing", on);
-      bubble.setAttribute("aria-pressed", String(on));
-    });
-  }
-
   function stopVoice() {
     voicePlaying = "";
     if (voiceAudio) {
@@ -1349,7 +1290,6 @@
       } catch (err) {
       }
     }
-    markVoicePlaying();
   }
 
   function playVoiceSrc(src) {
@@ -1386,7 +1326,6 @@
     } catch (err) {
       if (voicePlaying === src) stopVoice();
     }
-    markVoicePlaying();
   }
 
   function easterEggSource() {
@@ -1531,13 +1470,6 @@
       if (!target) return;
       event.preventDefault();
       openContextMenu(event, target);
-    });
-
-    el.voiceList.addEventListener("click", (event) => {
-      const bubble = event.target.closest(".voice-bubble");
-      if (!bubble) return;
-      if (bubble.dataset.src === voicePlaying) stopVoice();
-      else playVoiceSrc(bubble.dataset.src);
     });
 
     (el.naiwaToggles || []).forEach((node) => {
@@ -1689,9 +1621,6 @@
     el.themeToggle = $("themeToggle");
     el.themeIcon = $("themeIcon");
     el.naiwaToggles = Array.from(document.querySelectorAll("[data-naiwa-toggle]"));
-    el.voiceSection = $("voice");
-    el.voiceTitle = $("voiceTitle");
-    el.voiceList = $("voiceList");
     el.mobileMenuToggle = $("mobileMenuToggle");
     el.mobileNav = $("mobileNav");
     el.uploadDialog = $("uploadDialog");

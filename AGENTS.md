@@ -69,7 +69,7 @@
 - `tags` 数组必须恰有一个元素对应每个标签维度，按维度顺序填写非负本地整数序号；未知维度使用 JSON `null`。例如 `[2, null, 0]` 表示第一维取本地序号 2、第二维未知、第三维取本地序号 0。
 - `tags` 也允许对象写法 `{ "维度名": 本地整数序号或标签文字或 null }`，适合强调维度名或只记录部分维度。未知维度名和未定义的序号/标签文字均无效。
 - 当前项目的常规分类为 `animated`（动图）和 `static`（静态图）；数据结构不在校验器中硬编码只允许这两个分类。极短视频应转换成 GIF；较长视频不收录。
-- 角色语音由可选的 `data/<role-id>/voice.json` 驱动：数组每项含非空 `text` 和 `src`，`src` 必须指向 `assets/audio/` 下已存在的文件，同一文件内 `src` 不重复。语音区随当前角色渲染，角色无语音时隐藏；不在 `app.js` 或 `index.html` 写死音频列表。
+- 角色语音由可选的 `data/<role-id>/voice.json` 驱动：数组每项含非空 `text` 和 `src`，`src` 必须指向 `assets/audio/` 下已存在的文件，同一文件内 `src` 不重复。语音不单列成页面区域，只在页面右键彩蛋和桌宠说话时随机取一条播放；角色无语音时彩蛋回落到 `EASTER_EGG.fallbackSrc`。不在 `app.js` 或 `index.html` 写死音频列表。
 - 新投稿 `url` 必须指向贡献者公开 Fork 中图片上传 commit 的 `NaiLoong/blob/<40位commit-sha>/<path>`、紧凑格式 `<fork-owner>/<40位commit-sha>/<path>` 或同一文件的 GitHub RAW URL。校验器把等价地址归一后检查重复。禁止使用会随分支后续提交改变内容的 `image` 分支 URL。校验器只校验 URL 结构，不联网请求图片；本地 `assets/placeholders/` 下已存在的占位资源例外保留。
 - 桌宠由可选的 `data/pet.json` 驱动：`sheet` 指向 `assets/` 下已存在的雪碧图；`frameWidth`、`frameHeight`、`columns`、`rows` 为正整数；`animations` 是非空数组，每项含唯一小写 `id`、小于 `rows` 的 `row` 和逐帧 `durations`（每项 1–3000 毫秒，帧数不超过 `columns`），必须包含 `idle`；`size` 可选，取值 24–400 像素。桌宠的台词和音频复用当前角色的 `voice.json`，不在 `pet.js` 中写死素材或台词。
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
