@@ -96,22 +96,14 @@
   --r-lg: 22px;
 }
 
-:root[data-theme="naiwa"] body {
-  background-image:
-    radial-gradient(circle at 12% 14%, rgba(11, 127, 168, 0.14), transparent 40%),
-    radial-gradient(circle at 88% 8%, rgba(255, 255, 255, 0.4), transparent 38%),
-    radial-gradient(circle at 70% 92%, rgba(11, 127, 168, 0.1), transparent 42%);
-  background-attachment: fixed;
-}
-
 :root[data-theme="naiwa"] ::selection {
   background: rgba(245, 163, 0, 0.42);
 }
 
 /* 奶蛙主题的背景：一只奶蛙眼常驻视口右侧，画完之后每隔几秒眨一下。
    描边统一 pathLength="1" 归一，画入靠 stroke-dashoffset 1→0，不用量路径长度。
-   眼睛只盖在页面背景之上：拼图、卡片这些组件仍画在它上面，
-   没有底板的文字层单独抬到眼睛之上，避免 multiply 压暗小字。 */
+   眼睛只盖在平涂底色之上，拼图和卡片这些组件仍画在它上面；
+   没有底板的文字层单独抬到眼睛之上，免得被瞳孔压住。 */
 .naiwa-backdrop {
   display: none;
 }
@@ -125,7 +117,6 @@
   z-index: 0;
   transform: translateY(-50%);
   pointer-events: none;
-  mix-blend-mode: multiply;
 }
 
 /* 这些文字直接画在页面背景上，没有自己的底板，所以抬到眼睛之上；
@@ -152,16 +143,17 @@
 .naiwa-eye-ring {
   fill: none;
   stroke: #6dfe0c;
-  stroke-opacity: 0.8;
+  stroke-opacity: 1;
   stroke-width: 40;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
+  /* 虚线段比 pathLength 略长一点，闭合处才会自己叠上，不留接缝。 */
+  stroke-dasharray: 1.02;
+  stroke-dashoffset: 1.02;
   animation: naiwa-draw 900ms 200ms ease-out forwards;
 }
 
 .naiwa-eye-pupil {
   fill: #000;
-  fill-opacity: 0.45;
+  fill-opacity: 1;
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
@@ -169,14 +161,14 @@
 }
 
 .naiwa-eye-glint {
-  fill: #fffdf0;
+  fill: #fff;
   opacity: 0;
   animation: naiwa-fade 360ms 1200ms ease-out forwards;
 }
 
 .naiwa-eye-glint-arc {
   fill: none;
-  stroke: #fffdf0;
+  stroke: #fff;
   stroke-width: 30;
   stroke-linecap: round;
   stroke-dasharray: 1;
@@ -187,7 +179,7 @@
 .naiwa-mouth {
   fill: none;
   stroke: #000;
-  stroke-opacity: 0.4;
+  stroke-opacity: 1;
   stroke-width: 48;
   stroke-linecap: round;
   stroke-dasharray: 1;
@@ -262,11 +254,9 @@
   }
 }
 
+/* 奶蛙主题的首屏不要光晕：底色是平涂的奶黄，背景眼睛才不会被叠出斑块。 */
 :root[data-theme="naiwa"] .hero-aurora {
-  background:
-    radial-gradient(45% 55% at 18% 30%, rgba(255, 255, 255, 0.5), transparent 70%),
-    radial-gradient(40% 50% at 78% 20%, rgba(11, 127, 168, 0.24), transparent 70%),
-    radial-gradient(50% 60% at 55% 90%, rgba(245, 163, 0, 0.32), transparent 70%);
+  display: none;
 }
 
 :root[data-theme="naiwa"] .hero-title,

@@ -96,8 +96,9 @@ node tests/md.test.js
 
 - 画入靠 `pathLength="1"` 把描边长度归一，再用 `stroke-dashoffset: 1 → 0` 做，不需要事先量路径长度；顺序是绿圈 → 瞳孔 → 高光 → 嘴，全部在 2.6 秒内画完。
 - 眨眼是上下裁切，不是压扁：两层 `<clipPath>` 矩形把 `y` / `height` 从整只眼睛（`243` / `314`）收到过中心的横缝（`376` / `48`），周期互质（6.5s 与 11s）叠加后间隔不固定；入场结束后才开始，不做整段循环重播。嘴在裁剪组之外，眨不眨都在。
-- 图层 `position: fixed` 加 `z-index: 0` 和 `mix-blend-mode: multiply`，只压在页面底色和光晕之上；首屏拼图（`z-index: 1`–`5`）、表情卡片、顶栏这些自带不透明底板的组件都画在它上面。没有底板的文字层单独抬到 `z-index: 1`：`.hero-copy`、`.sidebar`、`.toolbar`、`.tag-panel`、`.role-intro`、`.pager`、`.empty-state`、`.contribute`、`.site-footer`。
-- 瞳孔墨度 45%、嘴 40%、绿圈 80%。眼睛盖在组件之下，实测 185 个文本框的最坏对比度相对"关掉眼睛"最多只差 0.05，所以不必再压淡；改浓、改尺寸或改层序后要按没有底板的元素（角色简介、结果计数、标签行标题、页脚）复核。
+- 图层 `position: fixed` 加 `z-index: 0`，不用混合模式，只压在平涂的页面底色之上；首屏拼图（`z-index: 1`–`5`）、表情卡片、顶栏这些自带不透明底板的组件都画在它上面。没有底板的文字层单独抬到 `z-index: 1`：`.hero-copy`、`.sidebar`、`.toolbar`、`.tag-panel`、`.role-intro`、`.pager`、`.empty-state`、`.contribute`、`.site-footer`。
+- 四个图元的不透明度都是 1，颜色照 GIF 实测值平涂：绿圈 `#6dfe0c`、瞳孔和嘴 `#000`、高光 `#fff`。眼睛画在所有组件底下，实测 185 个文本框的最坏对比度相对"关掉眼睛"最多只差 0.13，所以不必为了文字压淡；改浓淡、尺寸或层序后仍要按没有底板的元素（角色简介、结果计数、标签行标题、页脚）复核。
+- 奶蛙主题的首屏是平涂奶黄：`:root[data-theme="naiwa"] .hero-aurora` 设成 `display: none`，`body` 也不加径向光斑。这两层会在眼睛底下叠出色块，还会被 `.hero { overflow: hidden }` 切出硬边，眼睛压在上方就会跟着深浅不匀，看着像眼睛自己发花。
 - `prefers-reduced-motion: reduce` 时不画入也不眨，直接呈现睁开的眼睛；窄屏 700px 以下不显示。
 
 ### 表情记录：分类文件
