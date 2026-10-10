@@ -108,6 +108,160 @@
   background: rgba(245, 163, 0, 0.42);
 }
 
+/* 奶蛙主题的背景：一只奶蛙眼常驻视口右侧，画完之后每隔几秒眨一下。
+   描边统一 pathLength="1" 归一，画入靠 stroke-dashoffset 1→0，不用量路径长度。
+   眼睛只盖在页面背景之上：拼图、卡片这些组件仍画在它上面，
+   没有底板的文字层单独抬到眼睛之上，避免 multiply 压暗小字。 */
+.naiwa-backdrop {
+  display: none;
+}
+
+:root[data-theme="naiwa"] .naiwa-backdrop {
+  display: block;
+  position: fixed;
+  top: 50%;
+  right: 3vmin;
+  width: min(84vmin, 760px);
+  z-index: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
+/* 这些文字直接画在页面背景上，没有自己的底板，所以抬到眼睛之上；
+   拼图、卡片自带不透明底板，留在眼睛下面。 */
+:root[data-theme="naiwa"] .hero-copy,
+:root[data-theme="naiwa"] .sidebar,
+:root[data-theme="naiwa"] .toolbar,
+:root[data-theme="naiwa"] .tag-panel,
+:root[data-theme="naiwa"] .role-intro,
+:root[data-theme="naiwa"] .pager,
+:root[data-theme="naiwa"] .empty-state,
+:root[data-theme="naiwa"] .contribute,
+:root[data-theme="naiwa"] .site-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.naiwa-eye {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.naiwa-eye-ring {
+  fill: none;
+  stroke: #6dfe0c;
+  stroke-opacity: 0.8;
+  stroke-width: 40;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: naiwa-draw 900ms 200ms ease-out forwards;
+}
+
+.naiwa-eye-pupil {
+  fill: #000;
+  fill-opacity: 0.45;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: naiwa-grow 420ms 900ms ease-out forwards;
+}
+
+.naiwa-eye-glint {
+  fill: #fffdf0;
+  opacity: 0;
+  animation: naiwa-fade 360ms 1200ms ease-out forwards;
+}
+
+.naiwa-eye-glint-arc {
+  fill: none;
+  stroke: #fffdf0;
+  stroke-width: 30;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: naiwa-draw 360ms 1240ms ease-out forwards;
+}
+
+.naiwa-mouth {
+  fill: none;
+  stroke: #000;
+  stroke-opacity: 0.4;
+  stroke-width: 48;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: naiwa-draw 1100ms 1500ms ease-out forwards;
+}
+
+/* 眨眼是上下裁切：眼皮窗口收成一条横缝再展开，眼睛本身不被压扁。
+   两层周期互质（6.5s 与 11s）叠在一起，间隔不固定，像偶尔眨一下。 */
+.naiwa-lid {
+  animation: naiwa-blink 6.5s 3s infinite;
+}
+
+.naiwa-lid-2 {
+  animation: naiwa-blink 11s 5.4s infinite;
+}
+
+@keyframes naiwa-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes naiwa-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes naiwa-grow {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes naiwa-blink {
+  0%,
+  91%,
+  100% {
+    y: 243px;
+    height: 314px;
+  }
+  94.5% {
+    y: 376px;
+    height: 48px;
+  }
+  97.5% {
+    y: 243px;
+    height: 314px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 不做画入、也不眨，直接呈现一只睁开的眼睛。 */
+  :root[data-theme="naiwa"] .naiwa-backdrop svg * {
+    animation: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 700px) {
+  /* 窄屏首屏要给正文让位，背景眼睛只在更宽的视口出现。 */
+  :root[data-theme="naiwa"] .naiwa-backdrop {
+    display: none;
+  }
+}
+
 :root[data-theme="naiwa"] .hero-aurora {
   background:
     radial-gradient(45% 55% at 18% 30%, rgba(255, 255, 255, 0.5), transparent 70%),

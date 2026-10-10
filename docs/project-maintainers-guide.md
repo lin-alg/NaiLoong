@@ -8,6 +8,8 @@
 | :--- | :--- |
 | 页面结构和文案 | `index.html` |
 | 布局、主题和样式 | `assets/css/style.css`；参照[前端样式参考](../github-design-system-analysis.md) |
+| 界面图标 | `assets/js/icons.js` |
+| 奶蛙主题的背景眼睛 | `index.html` 的 `.naiwa-backdrop`、`assets/css/style.css` 的图标段 |
 | 站内文档页和 Markdown 渲染 | `docs.html`、`assets/js/docs.js`、`assets/js/md.js`、`assets/css/docs.css` |
 | 数据加载、路由、分页和页面交互 | `assets/js/app.js` |
 | 标签解析、搜索和筛选 | `assets/js/search.js` |
@@ -87,6 +89,16 @@ node tests/md.test.js
 - 静态 HTML 写 `data-icon` 宿主，页面脚本启动时由 `NaiIcons.hydrate()` 填充；JS 拼 HTML 用 `NaiIcons.svg(name, size)`，角色 `icon` 这类多图标字段用 `NaiIcons.markup(value, size)`。
 - 新增图标：从 `https://api.iconify.design/<集合>.json?icons=<名字>` 取 `body`，按 `"集合:名字"` 登记进 `REGISTRY`，同时更新校验器可识别的图标名。
 - `scripts/validate_data.py` 会读取该文件里的图标名来校验角色 `icon`，所以注册表的键名保持 `"前缀:名字":` 一行的写法。
+
+### 奶蛙主题背景
+
+`index.html` 在 `<body>` 开头放了 `<div class="naiwa-backdrop">`，里面是一只奶蛙眼的内联 SVG，只在 `data-theme="naiwa"` 下显示，常驻视口右侧。图形按投稿 GIF 的比例量出来重画：绿圈用 `r=122` 加 `stroke-width=40` 的描边圆，瞳孔 `r=102`，两处高光和左下的嘴都是描边路径；嘴沿 GIF 一样被画框左边裁掉一截，不收端点。
+
+- 画入靠 `pathLength="1"` 把描边长度归一，再用 `stroke-dashoffset: 1 → 0` 做，不需要事先量路径长度；顺序是绿圈 → 瞳孔 → 高光 → 嘴，全部在 2.6 秒内画完。
+- 眨眼是上下裁切，不是压扁：两层 `<clipPath>` 矩形把 `y` / `height` 从整只眼睛（`243` / `314`）收到过中心的横缝（`376` / `48`），周期互质（6.5s 与 11s）叠加后间隔不固定；入场结束后才开始，不做整段循环重播。嘴在裁剪组之外，眨不眨都在。
+- 图层 `position: fixed` 加 `z-index: 0` 和 `mix-blend-mode: multiply`，只压在页面底色和光晕之上；首屏拼图（`z-index: 1`–`5`）、表情卡片、顶栏这些自带不透明底板的组件都画在它上面。没有底板的文字层单独抬到 `z-index: 1`：`.hero-copy`、`.sidebar`、`.toolbar`、`.tag-panel`、`.role-intro`、`.pager`、`.empty-state`、`.contribute`、`.site-footer`。
+- 瞳孔墨度 45%、嘴 40%、绿圈 80%。眼睛盖在组件之下，实测 185 个文本框的最坏对比度相对"关掉眼睛"最多只差 0.05，所以不必再压淡；改浓、改尺寸或改层序后要按没有底板的元素（角色简介、结果计数、标签行标题、页脚）复核。
+- `prefers-reduced-motion: reduce` 时不画入也不眨，直接呈现睁开的眼睛；窄屏 700px 以下不显示。
 
 ### 表情记录：分类文件
 
