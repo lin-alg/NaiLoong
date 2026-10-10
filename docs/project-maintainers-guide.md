@@ -101,6 +101,31 @@ node tests/md.test.js
 - 音频由主仓库提供，不走投稿区。新增语音先把文件放进 `assets/audio/`，再在角色的语音文件中登记。
 - 网站在表情库上方的语音区渲染当前角色的语音，点击气泡播放；页面右键随机播放的也是这批语音。角色没有登记语音时，语音区自动隐藏。
 
+### 桌宠：`data/pet.json`
+
+```json
+{
+  "sheet": "assets/pet/naifrog-sheet.webp",
+  "frameWidth": 192,
+  "frameHeight": 208,
+  "columns": 8,
+  "rows": 9,
+  "size": 104,
+  "animations": [
+    { "id": "idle", "row": 0, "durations": [280, 110, 110, 140, 140, 320] },
+    { "id": "walk-right", "row": 1, "durations": [120, 120, 120, 120, 120, 120, 120, 220] }
+  ]
+}
+```
+
+雪碧图按 petdex 规格排列：8 列、每帧 192×208，一行一个动作，逐帧给出停留毫秒数。9 行依次是 idle、walk-right、walk-left、talk、cheer、sleep、wait、run、review；`grab` 复用第 4 行（cheer）。
+
+- `sheet` 指向 `assets/` 下已存在的图片；`frameWidth`、`frameHeight`、`columns`、`rows` 是正整数；`animations` 非空，`id` 用小写 slug 且不重复，必须有 `idle`，`row` 小于 `rows`，帧数不超过 `columns`。`size` 是显示高度，取 24–400 像素。
+- 走路朝向由 `walk-right` / `walk-left` 两行素材提供，不做镜像翻转；呼吸、迈步摆动和落地挤压由 CSS 叠加。
+- 桌宠说话取当前角色 `voice.json` 里的随机一条，台词和音频都不另外维护。
+- 雪碧图取自 [`timerring/codex-pet-naiwa`](https://github.com/timerring/codex-pet-naiwa)（MIT），转成 WebP 后放进 `assets/pet/`；属主仓库资源，不走社区 Fork 图片链路。
+- 缺少 `data/pet.json`、缺 `idle` 或用户关掉桌宠时，页面不显示桌宠；关闭状态记在 `localStorage` 的 `nai-pet-off`，由顶栏「🐾 桌宠」按钮唤出。
+
 ### 标签：`tags.json`
 
 ```json

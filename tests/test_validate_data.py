@@ -291,7 +291,7 @@ class ValidateDataTests(unittest.TestCase):
         )
 
         errors = validate_data(self.root)
-        self.assertTrue(any("audio file not found" in error for error in errors))
+        self.assertTrue(any("src file not found" in error for error in errors))
 
     def test_rejects_duplicate_voice_src(self):
         self.write_audio("laugh.mp3")
@@ -306,6 +306,110 @@ class ValidateDataTests(unittest.TestCase):
 
         errors = validate_data(self.root)
         self.assertTrue(any("duplicate voice src" in error for error in errors))
+
+    def write_asset(self, relative_path):
+        path = self.root / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"\x00")
+
+    def pet_config(self, **overrides):
+        base = {
+            "sheet": "assets/pet/sheet.webp",
+            "frameWidth": 192,
+            "frameHeight": 208,
+            "columns": 8,
+            "rows": 9,
+            "size": 104,
+            "animations": [
+                {"id": "idle", "row": 0, "durations": [280, 110, 320]},
+                {"id": "walk-right", "row": 1, "durations": [120, 220]},
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def write_pet(self, value):
+        self.write_asset("assets/pet/sheet.webp")
+        self.write_json("data/pet.json", value)
+
+    def test_accepts_pet_sheet(self):
+        self.write_pet(self.pet_config())
+
+        self.assertEqual(validate_data(self.root), [])
+
+    def test_rejects_pet_without_idle_animation(self):
+        self.write_pet(
+            self.pet_config(animations=[{"id": "walk-right", "row": 1, "durations": [120]}])
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("must include an idle animation" in error for error in errors))
+
+    def test_rejects_empty_pet_animations(self):
+        self.write_pet(self.pet_config(animations=[]))
+
+        errors = validate_data(self.root)
+        self.assertTrue(any('"animations" must be a non-empty array' in error for error in errors))
+
+    def test_rejects_duplicate_pet_animation_id(self):
+        self.write_pet(
+            self.pet_config(
+                animations=[
+                    {"id": "idle", "row": 0, "durations": [120]},
+                    {"id": "idle", "row": 1, "durations": [120]},
+                ]
+            )
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("duplicate animation id" in error for error in errors))
+
+    def test_rejects_pet_row_outside_sheet(self):
+        self.write_pet(
+            self.pet_config(animations=[{"id": "idle", "row": 42, "durations": [120]}])
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("row 42 is outside the 9-row sheet" in error for error in errors))
+
+    def test_rejects_pet_frames_beyond_columns(self):
+        self.write_pet(
+            self.pet_config(
+                columns=2,
+                animations=[{"id": "idle", "row": 0, "durations": [120, 120, 120]}],
+            )
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("exceed the 2 sheet columns" in error for error in errors))
+
+    def test_rejects_pet_bad_duration(self):
+        self.write_pet(
+            self.pet_config(animations=[{"id": "idle", "row": 0, "durations": [0]}])
+        )
+
+        errors = validate_data(self.root)
+        self.assertTrue(
+            any("every duration must be 1-3000 milliseconds" in error for error in errors)
+        )
+
+    def test_rejects_pet_sheet_outside_assets(self):
+        self.write_json("data/pet.json", self.pet_config(sheet="data/naiwa/tags.json"))
+
+        errors = validate_data(self.root)
+        self.assertTrue(any('"sheet" must point inside assets/' in error for error in errors))
+
+    def test_rejects_pet_missing_sheet_file(self):
+        self.write_json("data/pet.json", self.pet_config())
+
+        errors = validate_data(self.root)
+        self.assertTrue(any("sheet file not found" in error for error in errors))
+
+    def test_rejects_out_of_range_pet_size(self):
+        self.write_pet(self.pet_config(size=4000))
+
+        errors = validate_data(self.root)
+        self.assertTrue(any('"size" must be a number between 24 and 400' in error for error in errors))
 
 
 if __name__ == "__main__":

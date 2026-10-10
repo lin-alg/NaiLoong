@@ -271,9 +271,13 @@ def validate_data(root: Path | str) -> list[str]:
                                     errors,
                                 )
 
+    pet_path = (data_dir / "pet.json").resolve()
+    if pet_path.is_file():
+        _validate_pet(loaded.get(pet_path, INVALID), root, errors)
+
     for path in json_files:
         resolved = path.resolve()
-        if path.name in {"manifest.json", "tags.json", "tag-translations.json"}:
+        if path.name in {"manifest.json", "tags.json", "tag-translations.json", "pet.json"}:
             continue
         if resolved not in referenced_entries:
             errors.append(f"{_display_path(path, root)}: entry file is not referenced by manifest")
@@ -397,6 +401,82 @@ def _validate_url(value, owner, root, errors):
     return f"https://github.com/{owner_name.lower()}/NaiLoong/blob/{commit}/{parts.as_posix()}"
 
 
+def _validate_pet(value, root, errors):
+    owner = "data/pet.json"
+    if value is INVALID:
+        return
+    if not isinstance(value, dict):
+        errors.append(f"{owner}: expected a JSON object")
+        return
+
+    size = value.get("size")
+    if size is not None and (
+        isinstance(size, bool) or not isinstance(size, (int, float)) or not 24 <= size <= 400
+    ):
+        errors.append(f'{owner}: "size" must be a number between 24 and 400')
+
+    sheet = value.get("sheet")
+    if not isinstance(sheet, str) or not sheet.strip():
+        errors.append(f'{owner}: "sheet" must be a non-empty path inside assets/')
+    else:
+        _validate_asset_src(sheet, owner, root, errors, "sheet", "assets/")
+
+    def positive_int(field):
+        number = value.get(field)
+        if isinstance(number, bool) or not isinstance(number, int) or number < 1:
+            errors.append(f'{owner}: "{field}" must be a positive integer')
+            return None
+        return number
+
+    columns = positive_int("columns")
+    rows = positive_int("rows")
+    positive_int("frameWidth")
+    positive_int("frameHeight")
+
+    animations = value.get("animations")
+    if not isinstance(animations, list) or not animations:
+        errors.append(f'{owner}: "animations" must be a non-empty array')
+        return
+
+    seen = set()
+    for index, animation in enumerate(animations):
+        entry_owner = f"{owner} animation #{index}"
+        if not isinstance(animation, dict):
+            errors.append(f"{entry_owner}: expected an object")
+            continue
+
+        anim_id = animation.get("id")
+        if not isinstance(anim_id, str) or not SLUG.fullmatch(anim_id):
+            errors.append(f"{entry_owner}: id must be a lowercase slug")
+        elif anim_id in seen:
+            errors.append(f"{entry_owner}: duplicate animation id {anim_id!r}")
+        else:
+            seen.add(anim_id)
+
+        row = animation.get("row")
+        if isinstance(row, bool) or not isinstance(row, int) or row < 0:
+            errors.append(f'{entry_owner}: "row" must be a non-negative integer')
+        elif rows is not None and row >= rows:
+            errors.append(f"{entry_owner}: row {row} is outside the {rows}-row sheet")
+
+        durations = animation.get("durations")
+        if not isinstance(durations, list) or not durations:
+            errors.append(f'{entry_owner}: "durations" must be a non-empty array of milliseconds')
+            continue
+        if any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 1 or item > 3000
+            for item in durations
+        ):
+            errors.append(f'{entry_owner}: every duration must be 1-3000 milliseconds')
+        if columns is not None and len(durations) > columns:
+            errors.append(
+                f"{entry_owner}: {len(durations)} frames exceed the {columns} sheet columns"
+            )
+
+    if "idle" not in seen:
+        errors.append(f'{owner}: "animations" must include an idle animation')
+
+
 def _validate_voice_entries(value, owner, root, errors):
     if value is INVALID:
         return
@@ -423,25 +503,26 @@ def _validate_voice_entries(value, owner, root, errors):
             errors.append(f"{entry_owner}: duplicate voice src {source!r}")
             continue
         seen_sources.add(source)
-        _validate_audio_src(source, entry_owner, root, errors)
+        _validate_asset_src(source, entry_owner, root, errors, "src", "assets/audio/")
 
 
-def _validate_audio_src(value, owner, root, errors):
-    if not value.startswith("assets/audio/"):
-        errors.append(f'{owner}: "src" must point inside assets/audio/: {value!r}')
+def _validate_asset_src(value, owner, root, errors, field, prefix):
+    """Check a repo-relative path under `prefix` and confirm the file exists."""
+    if not value.startswith(prefix):
+        errors.append(f'{owner}: "{field}" must point inside {prefix}: {value!r}')
         return
     local_path = PurePosixPath(value)
     if ".." in local_path.parts or "\\" in value:
-        errors.append(f'{owner}: audio path must stay inside assets/audio/: {value!r}')
+        errors.append(f'{owner}: {field} path must stay inside {prefix}: {value!r}')
         return
     target = (root / Path(*local_path.parts)).resolve()
     try:
-        target.relative_to((root / "assets" / "audio").resolve())
+        target.relative_to((root / Path(*PurePosixPath(prefix).parts)).resolve())
     except ValueError:
-        errors.append(f'{owner}: audio path must stay inside assets/audio/: {value!r}')
+        errors.append(f'{owner}: {field} path must stay inside {prefix}: {value!r}')
         return
     if not target.is_file():
-        errors.append(f"{owner}: audio file not found: {value}")
+        errors.append(f"{owner}: {field} file not found: {value}")
 
 
 def _validate_tag_definitions(value, owner, errors):

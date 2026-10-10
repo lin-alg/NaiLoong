@@ -6,6 +6,7 @@
     dataBase: "data/",
     tagDimensions: "data/tag-translations.json",
     fallback: "assets/placeholders/fallback.gif",
+    petData: "data/pet.json",
     uploadUrl: "https://wplace-gallery.linalg.tech/api/images/upload"
   };
 
@@ -278,6 +279,7 @@
     if (el.uploadDialog.open) return;
     if (typeof el.uploadDialog.showModal === "function") el.uploadDialog.showModal();
     else el.uploadDialog.setAttribute("open", "");
+    syncPetPause();
   }
 
   function setMobileMenu(open) {
@@ -1103,6 +1105,7 @@
     image.src = url;
     if (window.GhImg) window.GhImg.decorate(image);
     el.imageDialog.showModal();
+    syncPetPause();
   }
 
   // 从当前（可能被搜索/标签筛选过的）结果里随机抽一张打开。
@@ -1273,6 +1276,55 @@
       node.style.setProperty("--d", (i % 5) * 70 + "ms");
       observer.observe(node);
     });
+  }
+
+  function syncPetPause() {
+    if (!window.NaiPet) return;
+    const modalOpen = (el.imageDialog && el.imageDialog.open) || (el.uploadDialog && el.uploadDialog.open);
+    window.NaiPet.setPaused(modalOpen);
+  }
+
+  function syncPetButton() {
+    const off = !window.NaiPet || window.NaiPet.isHidden();
+    document.querySelectorAll("[data-pet-toggle]").forEach((node) => {
+      node.classList.toggle("is-on", !off);
+      node.setAttribute("aria-pressed", String(!off));
+      node.title = off ? "唤出奶蛙桌宠" : "让奶蛙躲起来";
+    });
+  }
+
+  function togglePet() {
+    if (!window.NaiPet) return;
+    if (window.NaiPet.isHidden()) window.NaiPet.show();
+    else window.NaiPet.hide();
+    syncPetButton();
+    toast(window.NaiPet.isHidden() ? "奶蛙躲起来了" : "奶蛙出来了");
+  }
+
+  async function startPet() {
+    if (!window.NaiPet) return;
+    let pet;
+    try {
+      pet = await fetchJSON(CONFIG.petData);
+    } catch (err) {
+      return;
+    }
+    if (!pet || !pet.sheet || !Array.isArray(pet.animations) || !pet.animations.length) return;
+    const narrow = (window.innerWidth || 1024) < 600;
+    window.NaiPet.start({
+      sheet: pet.sheet,
+      frameWidth: pet.frameWidth,
+      frameHeight: pet.frameHeight,
+      columns: pet.columns,
+      rows: pet.rows,
+      animations: pet.animations,
+      size: Math.round((Number(pet.size) || 104) * (narrow ? 0.72 : 1)),
+      // 台词跟着当前角色走：奶蛙页说奶蛙话，奶蛋页只会“安~迪~”。
+      lines: voiceSources,
+      play: playVoiceSrc,
+      onHide: syncPetButton
+    });
+    syncPetButton();
   }
 
   function voiceSources() {
@@ -1492,6 +1544,14 @@
       node.addEventListener("click", toggleNaiwaTheme);
     });
 
+    document.querySelectorAll("[data-pet-toggle]").forEach((node) => {
+      node.addEventListener("click", togglePet);
+    });
+
+    [el.imageDialog, el.uploadDialog].forEach((dlg) => {
+      dlg.addEventListener("close", syncPetPause);
+    });
+
     // 页面任意位置右键都有机会触发彩蛋，和图片菜单互不影响。
     document.addEventListener("contextmenu", () => {
       if (Math.random() < EASTER_EGG.chance) playEasterEgg();
@@ -1671,6 +1731,7 @@
     bindEvents();
     setupReveal();
     loadStars();
+    startPet();
     el.grid.innerHTML = skeletonMarkup(8);
 
     try {

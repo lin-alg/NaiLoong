@@ -46,6 +46,9 @@
 - `data/tag-translations.json`：标签维度的中英文显示名；不在前端代码中硬编码维度译名。
 - `data/<role-id>/`：该角色的分类文件、`tags.json` 和可选的 `voice.json`。
 - `assets/audio/`：主仓库提供的角色语音音频，由 `data/<role-id>/voice.json` 登记。
+- `assets/pet/`：桌宠雪碧图，取自 `timerring/codex-pet-naiwa`（MIT）的奶蛙素材并按 petdex 规格排列；属主仓库资源，不走社区 Fork 图片链路。
+- `data/pet.json`：桌宠的动作到素材映射和显示尺寸；缺文件或缺 `idle` 时页面不渲染桌宠。
+- `assets/js/pet.js`：零依赖网页桌宠，负责动作状态机、拖拽甩抛物理和说话气泡。
 - `hash.txt`：主分支已归档图片的 SHA-256 哈希，每行一个哈希值；不写图片 URL 或键值。
 - `.github/ISSUE_TEMPLATE/`：网站或项目建议、问题反馈模板及共享投稿 Issue 入口。
 - `.github/workflows/`：PR 测试/数据校验和 GitHub Pages 部署。
@@ -68,6 +71,7 @@
 - 当前项目的常规分类为 `animated`（动图）和 `static`（静态图）；数据结构不在校验器中硬编码只允许这两个分类。极短视频应转换成 GIF；较长视频不收录。
 - 角色语音由可选的 `data/<role-id>/voice.json` 驱动：数组每项含非空 `text` 和 `src`，`src` 必须指向 `assets/audio/` 下已存在的文件，同一文件内 `src` 不重复。语音区随当前角色渲染，角色无语音时隐藏；不在 `app.js` 或 `index.html` 写死音频列表。
 - 新投稿 `url` 必须指向贡献者公开 Fork 中图片上传 commit 的 `NaiLoong/blob/<40位commit-sha>/<path>`、紧凑格式 `<fork-owner>/<40位commit-sha>/<path>` 或同一文件的 GitHub RAW URL。校验器把等价地址归一后检查重复。禁止使用会随分支后续提交改变内容的 `image` 分支 URL。校验器只校验 URL 结构，不联网请求图片；本地 `assets/placeholders/` 下已存在的占位资源例外保留。
+- 桌宠由可选的 `data/pet.json` 驱动：`sheet` 指向 `assets/` 下已存在的雪碧图；`frameWidth`、`frameHeight`、`columns`、`rows` 为正整数；`animations` 是非空数组，每项含唯一小写 `id`、小于 `rows` 的 `row` 和逐帧 `durations`（每项 1–3000 毫秒，帧数不超过 `columns`），必须包含 `idle`；`size` 可选，取值 24–400 像素。桌宠的台词和音频复用当前角色的 `voice.json`，不在 `pet.js` 中写死素材或台词。
 - 校验器拒绝数据集中重复的图片 URL，包含同一文件的 blob 与 RAW 地址。图片内容是否重复由人工审核判断。
 - 哈希去重使用主分支 `hash.txt` 和 GitHub Actions Cache 中的已入库缓存、预占位缓存。缓存使用共同前缀加时间戳后缀；workflow concurrency 串行化读写，任务完成后保存新缓存并删除旧缓存，失败时保留旧缓存以便下次恢复。预占位代表仍有效的待处理图片，保留在缓存中继续顺延，不写入主分支；每日归档任务才批量追加已入库哈希到 `hash.txt`，写入成功后清理 `ingested` 临时记录。待处理评论换图或清空时回收旧占位；删除未认领评论时释放占位；已认领评论删除后保留占位并标记为已删除，直到对应 PR 合并或关闭；未合并关闭 PR 时保留仍存在的 Issue 投稿占位并解除认领，纯 PR 占位释放供重新检查。
 - 单张投稿图片严格小于或等于 5 MB；鼓励压到 2 MB 以下。数据校验器本身不下载 Fork 图片；`meme-hash.yml` 会在受信任的主仓库 workflow 中下载新增 PR 图片和 Issue 附件来执行 5 MB 检查。
