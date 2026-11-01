@@ -12,6 +12,7 @@
 
   const PAGE_SIZES = [4, 8, 16, 32, 64];
   const DEFAULT_PAGE_SIZE = 8;
+  const FAVORITES_KEY = "nai-favorites";
   const STAGGER_CAP = 14;
   const INTRO_SFX_VOLUME = 2.5; // 1 为基准
   const INTRO_FEAR = { src: "assets/audio/hola_ganbadie.mp3", duration: 0.9 };
@@ -30,7 +31,9 @@
     query: "",
     selected: new Map(),
     page: 1,
-    pageSize: DEFAULT_PAGE_SIZE
+    pageSize: DEFAULT_PAGE_SIZE,
+    favorites: [],
+    favoritesView: false
   };
   const uploadState = {
     entries: [],
@@ -555,22 +558,61 @@
     };
   }
 
+  function favoriteId(entry) {
+    return JSON.stringify([entry.charId, entry.subId, entry.url, entry.title]);
+  }
+
+  function saveFavorites() {
+    storageSet(FAVORITES_KEY, JSON.stringify(state.favorites));
+  }
+
+  function toggleFavorite(card) {
+    const entry = {
+      charId: card.dataset.charId,
+      charName: card.dataset.charName,
+      subId: card.dataset.subId,
+      url: card.dataset.favoriteUrl,
+      title: card.dataset.imageTitle,
+      tags: JSON.parse(card.dataset.favoriteTags || "[]"),
+      displayTags: JSON.parse(card.dataset.imageTags || "[]")
+    };
+    const id = favoriteId(entry);
+    const existing = state.favorites.findIndex((favorite) => favoriteId(favorite) === id);
+    if (existing >= 0) state.favorites.splice(existing, 1);
+    else state.favorites.push(entry);
+    saveFavorites();
+    if (state.favoritesView) renderGrid();
+    else {
+      const button = card.querySelector("[data-favorite-toggle]");
+      const on = existing < 0;
+      button.classList.toggle("is-on", on);
+      button.setAttribute("aria-pressed", String(on));
+      button.setAttribute("aria-label", (on ? "取消收藏：" : "收藏：") + entry.title);
+      button.title = on ? "取消收藏" : "添加到收藏夹";
+    }
+  }
+
   function cardMarkup(item, charMeta, index) {
     const alt = item.title + " · " + charMeta.name;
-    const sub = currentSub();
+    const subId = item.subId || (currentSub() && currentSub().meta.id) || "";
+    const sub = charMeta.subcategories && charMeta.subcategories.find((entry) => entry.id === subId);
+    const favorite = { charId: charMeta.id, subId, url: item.url, title: item.title };
+    const favoriteKey = favoriteId(favorite);
+    const isFavorite = state.favorites.some((entry) => favoriteId(entry) === favoriteKey);
     const preview = window.GhImg && sub
-      ? window.GhImg.preview(item.url, charMeta.id, sub.meta.id)
+      ? window.GhImg.preview(item.url, charMeta.id, sub.id)
       : null;
     const legacyPreview = window.GhImg && sub
-      ? window.GhImg.previewLegacy(item.url, charMeta.id, sub.meta.id)
+      ? window.GhImg.previewLegacy(item.url, charMeta.id, sub.id)
       : null;
     const localFallback = typeof item.url === "string" && item.url.indexOf("assets/placeholders/") === 0
       ? (window.GhImg ? window.GhImg.compressedAsset(item.url) : item.url)
       : (window.GhImg ? window.GhImg.compressedAsset(CONFIG.fallback) : CONFIG.fallback);
     const src = esc(preview || localFallback);
-    const labels = window.MemeSearch.labelsOf(
-      window.MemeSearch.resolveRawTags(item.tags, currentChar().tagIndex),
-      currentChar().tagIndex
+    const char = state.chars.get(charMeta.id);
+    const labels = Array.isArray(item.displayTags) ? item.displayTags : window.MemeSearch.labelsOf(
+      window.MemeSearch.resolveRawTags(item.tags, char.tagIndex),
+      char.tagIndex
     );
     const cardData = imageCardData(item.url, item.title, labels);
     const link = esc(cardData.originalUrl);
@@ -590,6 +632,12 @@
       esc(cardData.sourceOwnerUrl) +
       '" data-source-file="' +
       esc(cardData.sourceFile) +
+      '" data-favorite-id="' + esc(favoriteKey) +
+      '" data-char-id="' + esc(charMeta.id) +
+      '" data-char-name="' + esc(charMeta.name) +
+      '" data-sub-id="' + esc(subId) +
+      '" data-favorite-url="' + esc(item.url) +
+      '" data-favorite-tags="' + esc(JSON.stringify(Array.isArray(item.tags) ? item.tags : [])) +
       '">' +
       '<button class="card-open" type="button" aria-label="查看原图：' +
       esc(item.title) +
@@ -615,7 +663,10 @@
       link +
       '" download title="下载原图" aria-label="下载原图">' +
       ICON_DOWNLOAD +
-      "</a></div>" +
+      "</a>" +
+      '<button class="btn btn-ghost icon-btn favorite-btn' + (isFavorite ? " is-on" : "") + '" type="button" data-favorite-toggle aria-pressed="' + isFavorite + '" aria-label="' + (isFavorite ? "取消收藏：" : "收藏：") + esc(item.title) + '" title="' + (isFavorite ? "取消收藏" : "添加到收藏夹") + '">' +
+      '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.75 1.94 3.93 4.34.63-3.14 3.06.74 4.32L8 11.65l-3.88 2.04.74-4.32L1.72 6.31l4.34-.63L8 1.75Z"/></svg></button>' +
+      "</div>" +
       "</div></article>"
     );
   }
@@ -705,6 +756,10 @@
   }
 
   function renderGrid() {
+    if (state.favoritesView) {
+      renderFavorites();
+      return;
+    }
     const char = currentChar();
     const sub = currentSub();
 
@@ -729,6 +784,9 @@
     const filtering = state.query.trim() !== "" || state.selected.size > 0;
     el.clearFilters.hidden = !filtering;
     el.resultCount.textContent = "显示 " + total + " / " + sub.items.length;
+    el.emptyState.querySelector(".empty-icon").innerHTML = ICONS.markup("lucide:search", 40);
+    el.emptyState.querySelector("h3").textContent = "没找到匹配的表情";
+    el.emptyState.querySelector("p").textContent = "换个关键词，或者点掉几个标签试试。";
     el.emptyState.hidden = total !== 0;
 
     el.grid.innerHTML = pageItems.map((item, i) => cardMarkup(item, char.meta, i)).join("");
@@ -739,6 +797,42 @@
     });
 
     renderPager(total, pageCount, rangeStart, rangeEnd);
+  }
+
+  function renderFavorites() {
+    const entries = state.favorites.map((favorite) => {
+      const char = state.chars.get(favorite.charId);
+      if (!char) return null;
+      return {
+        char: char.meta,
+        item: {
+          url: favorite.url,
+          title: favorite.title,
+          tags: favorite.tags,
+          displayTags: favorite.displayTags,
+          subId: favorite.subId
+        }
+      };
+    }).filter(Boolean);
+    el.roleIntro.hidden = true;
+    el.subTabs.hidden = true;
+    el.tagPanel.hidden = true;
+    el.randomBtn.hidden = true;
+    el.clearFilters.hidden = true;
+    el.favoritesHeading.hidden = false;
+    el.favoritesCount.textContent = entries.length + " 张表情";
+    el.resultCount.textContent = "收藏 " + entries.length + " 张";
+    el.emptyState.hidden = entries.length !== 0;
+    el.emptyState.querySelector(".empty-icon").innerHTML = ICONS.markup("lucide:star", 40);
+    el.emptyState.querySelector("h3").textContent = "还没有收藏的表情";
+    el.emptyState.querySelector("p").textContent = "在表情卡片上点星星，就能把喜欢的表情放进收藏夹。";
+    el.emptyReset.hidden = true;
+    el.grid.innerHTML = entries.map(({ char, item }, index) => cardMarkup(item, char, index)).join("");
+    el.grid.querySelectorAll("img").forEach((img) => {
+      if (window.GhImg) window.GhImg.decorate(img);
+      if (img.complete && img.naturalWidth > 0) img.classList.add("is-loaded");
+    });
+    el.pagerBottom.hidden = true;
   }
 
   function renderIntro() {
@@ -755,6 +849,15 @@
   }
 
   function render() {
+    if (state.favoritesView) {
+      renderGrid();
+      return;
+    }
+    el.favoritesHeading.hidden = true;
+    el.subTabs.hidden = false;
+    el.tagPanel.hidden = false;
+    el.randomBtn.hidden = false;
+    el.emptyReset.hidden = false;
     renderSidebar();
     renderIntro();
     renderTabs();
@@ -784,6 +887,19 @@
     if (!state.manifest.length) return;
 
     const raw = location.hash.slice(1);
+    if (raw === "favorites") {
+      state.favoritesView = true;
+      el.sidebar.hidden = true;
+      renderGrid();
+      requestAnimationFrame(() => {
+        const header = document.querySelector(".site-header");
+        const top = el.favoritesHeading.getBoundingClientRect().top + window.scrollY - (header ? header.getBoundingClientRect().height : 0) - 12;
+        window.scrollTo({ top: Math.max(0, top), behavior: prefersReducedMotion() ? "auto" : "smooth" });
+      });
+      return;
+    }
+    state.favoritesView = false;
+    el.sidebar.hidden = false;
     // 普通锚点（如 #gallery、#contribute）只负责页面内滚动，不改变当前角色。
     if (!raw.startsWith("/")) {
       ensureSelection();
@@ -1614,6 +1730,11 @@
     );
 
     el.grid.addEventListener("click", async (event) => {
+      const favoriteButton = event.target.closest("[data-favorite-toggle]");
+      if (favoriteButton) {
+        toggleFavorite(favoriteButton.closest(".card"));
+        return;
+      }
       const link = event.target.closest(".download-btn");
       if (link) {
         event.preventDefault();
@@ -2839,6 +2960,12 @@
     el.naiwaToggles = Array.from(document.querySelectorAll("[data-naiwa-toggle]"));
     el.mobileMenuToggle = $("mobileMenuToggle");
     el.mobileNav = $("mobileNav");
+    el.sidebar = document.querySelector(".sidebar");
+    el.subTabs = $("subTabs");
+    el.tagPanel = $("tagPanel");
+    el.randomBtn = $("randomBtn");
+    el.favoritesHeading = $("favoritesHeading");
+    el.favoritesCount = $("favoritesCount");
     el.uploadDialog = $("uploadDialog");
     el.uploadDialogClose = $("uploadDialogClose");
     el.uploadChoose = $("uploadChoose");
@@ -2865,6 +2992,15 @@
 
     const storedSize = Number(storageGet("nai-page-size"));
     if (PAGE_SIZES.includes(storedSize)) state.pageSize = storedSize;
+    try {
+      const favorites = JSON.parse(storageGet(FAVORITES_KEY) || "[]");
+      if (Array.isArray(favorites)) state.favorites = favorites.filter((entry) =>
+        entry && typeof entry.charId === "string" && typeof entry.subId === "string" &&
+        typeof entry.url === "string" && typeof entry.title === "string"
+      );
+    } catch (err) {
+      state.favorites = [];
+    }
 
     applyRepoLinks();
     applyTheme(storageGet("nai-theme") || "naiwa");

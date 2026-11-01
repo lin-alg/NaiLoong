@@ -342,8 +342,10 @@ html.home-intro-active .naiwa-backdrop svg * {
   border-color: #e0b93f;
 }
 
-:root[data-theme="naiwa"] .card:hover {
-  transform: translateY(-6px) rotate(-0.3deg);
+@media (hover: hover) and (pointer: fine) {
+  :root[data-theme="naiwa"] .card:hover {
+    transform: translateY(-6px) rotate(-0.3deg);
+  }
 }
 
 :root[data-theme="naiwa"] .btn-ghost.is-on,
@@ -1726,14 +1728,16 @@ html.home-intro-active .intro-skip {
   will-change: transform, opacity;
 }
 
-.card:hover {
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
   border-color: var(--accent);
   box-shadow: var(--glow);
   transform: translateY(-4px);
-}
+  }
 
-.card:active {
-  transform: translateY(-1px);
+  .card:active {
+    transform: translateY(-1px);
+  }
 }
 
 @keyframes card-in {
@@ -1859,7 +1863,10 @@ html.home-intro-active .intro-skip {
 }
 
 .card:hover .download-btn,
-.download-btn:focus-visible {
+.card:hover .favorite-btn,
+.download-btn:focus-visible,
+.favorite-btn:focus-visible,
+.favorite-btn.is-on {
   opacity: 1;
 }
 
@@ -2126,6 +2133,61 @@ html.home-intro-active .intro-skip {
   overflow: visible;
   padding: 0.75rem 1.25rem;
   font-size: 1rem;
+}
+
+.favorite-btn {
+  position: relative;
+  z-index: 2;
+  margin-left: 0;
+  flex: none;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 150ms ease-out, color 150ms ease-out, background-color 150ms ease-out;
+}
+
+.download-btn {
+  margin-left: auto;
+}
+
+.favorite-btn svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.35;
+}
+
+.favorite-btn:hover,
+.favorite-btn.is-on {
+  color: #d99a00;
+}
+
+.favorite-btn.is-on svg {
+  fill: currentColor;
+}
+
+.favorites-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+.favorites-heading[hidden] {
+  display: none;
+}
+
+.favorites-heading h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.favorites-heading p {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .pet.is-intro-pet .pet-intro-label {
@@ -2700,7 +2762,8 @@ html.home-intro-active .intro-skip {
 }
 
 @media (max-width: 767px) {
-  .download-btn {
+  .download-btn,
+  .favorite-btn {
     opacity: 1;
   }
 
