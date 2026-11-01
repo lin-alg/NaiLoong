@@ -19,7 +19,7 @@
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
   <script>
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches && (!location.hash || location.hash === "#/")) {
+    if (!location.hash || location.hash === "#/") {
       document.documentElement.classList.add("home-intro-active");
     }
   </script>
@@ -125,12 +125,12 @@
     <div class="hero-aurora" aria-hidden="true"></div>
     <div class="container hero-inner">
       <div class="hero-copy">
-        <h1 class="hero-title" aria-label="变化永恒，奶龙助你领先。">
+        <h1 class="hero-title" aria-label="变化永恒，奶蛙助你领先。">
           <span class="hero-title-row" aria-hidden="true"><span data-title-rain>变化永恒，</span></span>
-          <span class="hero-title-row" aria-hidden="true"><span class="hero-accent hero-brand">奶龙</span><span class="hero-title-space"> </span><span data-title-rain>助你领先。</span></span>
+          <span class="hero-title-row" aria-hidden="true"><span class="hero-accent hero-brand">奶蛙</span><span class="hero-title-space"> </span><span data-title-rain>助你领先。</span></span>
         </h1>
-        <p class="hero-lead" id="heroLead" aria-label="全球首个奶科生物表情包集散地，致力于让优质表情触手可及。参与本开源项目，让你轻松掌握 Git 的使用。">
-          <span class="hero-lead-type" aria-hidden="true">全球首个奶科生物表情包集散地，致力于让优质表情触手可及。<br>参与本开源项目，让你轻松掌握 Git 的使用。</span>
+        <p class="hero-lead" id="heroLead" aria-label="全球最大的奶科生物表情包集散地，致力于让优质表情触手可及。参与本开源项目，让你轻松掌握 Git 的使用。">
+          <span class="hero-lead-type" aria-hidden="true">全球最大的奶科生物表情包集散地，致力于让优质表情触手可及。<br>参与本开源项目，让你轻松掌握 Git 的使用。</span>
         </p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="#contribute">参与项目</a>
@@ -148,14 +148,31 @@
           <div class="stat"><dt>浏览总数</dt><dd id="statViews" aria-live="polite">0</dd></div>
         </dl>
       </div>
-      <div class="hero-visual" aria-hidden="true">
-        <div class="hero-tile t1"><img data-src="assets/placeholders/naiwa_laugh.gif" alt=""></div>
-        <div class="hero-tile t2"><img data-src="assets/placeholders/naidan_andi.gif" alt=""></div>
-        <div class="hero-tile t3"><img data-src="assets/placeholders/naiwa_redemption.gif" alt=""></div>
-        <div class="hero-tile t4"><img data-src="assets/placeholders/naijing.jpg" alt=""></div>
-      </div>
     </div>
   </section>
+
+  <nav class="hero-visual" aria-label="奶-hub板块">
+    <a class="hero-tile t1" href="games.html" aria-label="游戏">
+      <span class="hero-art hero-art-games" data-art="assets/pet/naiwa-games.webp" aria-hidden="true"></span>
+      <span class="hero-label">奶蛙游戏</span>
+    </a>
+    <a class="hero-tile t2" href="tools.html" aria-label="工具">
+      <span class="hero-art hero-art-tools" data-art="assets/pet/naiwa-tools.webp" aria-hidden="true"></span>
+      <span class="hero-label">奶蛙工具</span>
+    </a>
+    <a class="hero-tile t3" href="winners.html" aria-label="排行榜">
+      <span class="hero-art hero-art-winners" data-art="assets/pet/Winners.webp" aria-hidden="true"></span>
+      <span class="hero-label">奶蛙排行榜</span>
+    </a>
+    <a class="hero-tile t4" href="other.html" aria-label="其它">
+      <span class="hero-art hero-art-other" data-art="pet-sheet" aria-hidden="true"></span>
+      <span class="hero-label">奇思妙想</span>
+    </a>
+    <div class="intro-projectile t1"><img data-src="assets/placeholders/naiwa_laugh.gif" alt=""></div>
+    <div class="intro-projectile t2"><img data-src="assets/placeholders/naidan_andi.gif" alt=""></div>
+    <div class="intro-projectile t3"><img data-src="assets/placeholders/naiwa_redemption.gif" alt=""></div>
+    <div class="intro-projectile t4"><img data-src="assets/placeholders/naijing.jpg" alt=""></div>
+  </nav>
 
   <main id="main" class="container layout" tabindex="-1">
     <aside class="sidebar" aria-label="角色导航">

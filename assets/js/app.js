@@ -55,6 +55,8 @@
   let sidebarHintReady = false;
   let homeAssetsReady = Promise.resolve();
   let heroImagesReady = Promise.resolve(false);
+  let petAnimationData = null;
+  const menuSpriteFrames = new WeakMap();
 
   const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
   const THEME_ICONS = {
@@ -1332,6 +1334,7 @@
       return false;
     }
     if (!pet || !pet.sheet || !Array.isArray(pet.animations) || !pet.animations.some((item) => item && item.id === "idle")) return false;
+    petAnimationData = pet;
     const cachedSheet = window.GhImg && window.GhImg.cachedAsset ? await window.GhImg.cachedAsset(pet.sheet) : null;
     const sheetUrl = cachedSheet || (window.GhImg && window.GhImg.compressedAsset
       ? window.GhImg.compressedAsset(pet.sheet)
@@ -2477,27 +2480,55 @@
     ]);
   }
 
+  function paintMenuSpriteFrame(node, frame) {
+    const sprite = menuSpriteFrames.get(node);
+    if (!sprite) {
+      node.style.backgroundPosition = (frame / 7 * 100) + "% 0";
+      return;
+    }
+    const padding = 6;
+    const sourceWidth = sprite.frameWidth - padding * 2;
+    sprite.context.clearRect(0, 0, sprite.canvas.width, sprite.canvas.height);
+    sprite.context.drawImage(
+      sprite.image,
+      frame * sprite.frameWidth + padding,
+      0,
+      sourceWidth,
+      sprite.image.naturalHeight,
+      0,
+      0,
+      sprite.canvas.width,
+      sprite.canvas.height
+    );
+  }
+
   function preloadHeroImages() {
-    const images = Array.from(document.querySelectorAll(".hero-tile img"));
-    images.forEach((image) => {
-      const source = image.dataset.src;
-      if (source && !image.getAttribute("src")) {
-        image.src = window.GhImg && window.GhImg.compressedAsset ? window.GhImg.compressedAsset(source) : source;
-        if (window.GhImg && window.GhImg.cachedAsset) {
-          window.GhImg.cachedAsset(source).then((cached) => {
-            if (cached && image.isConnected) image.src = cached;
-          });
-        }
+    const nodes = Array.from(document.querySelectorAll(".hero-visual [data-art], .intro-projectile img[data-src]"));
+    const images = nodes.map((node) => {
+      const source = node.dataset.src || (node.dataset.art === "pet-sheet" ? "assets/pet/naifrog-sheet.webp" : node.dataset.art);
+      if (!source) return Promise.resolve(false);
+      const image = new Image();
+      image.src = source;
+      if (node.dataset.src) node.src = image.src;
+      else if (!node.matches(".hero-art-games, .hero-art-tools")) {
+        node.style.backgroundImage = 'url("' + image.src.replace(/"/g, "%22") + '")';
       }
-      image.loading = "eager";
-      if (window.GhImg) window.GhImg.decorate(image);
-      image.addEventListener("error", () => {
-        if (window.GhImg && window.GhImg.advance(image)) return;
-        image.dataset.fallback = "1";
+      return waitForImage(image, 8000).then((ready) => {
+        if (!ready || !node.matches(".hero-art-games, .hero-art-tools")) return ready;
+        const canvas = document.createElement("canvas");
+        canvas.className = "hero-art-canvas";
+        canvas.width = Math.round(image.naturalWidth / 8);
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d");
+        if (!context) return false;
+        node.style.backgroundImage = "none";
+        node.replaceChildren(canvas);
+        menuSpriteFrames.set(node, { canvas, context, image, frameWidth: image.naturalWidth / 8 });
+        paintMenuSpriteFrame(node, 0);
+        return true;
       });
     });
-    return Promise.all(images.map((image) => waitForImage(image, 8000)))
-      .then((results) => results.every(Boolean));
+    return Promise.all(images).then((results) => results.every(Boolean));
   }
 
   function cacheHomeOriginals() {
@@ -2507,6 +2538,9 @@
       "assets/placeholders/naidan_andi.gif",
       "assets/placeholders/naiwa_redemption.gif",
       "assets/placeholders/naijing.jpg",
+      "assets/pet/naiwa-games.webp",
+      "assets/pet/naiwa-tools.webp",
+      "assets/pet/Winners.webp",
       "assets/placeholders/fallback.gif",
       "assets/pet/naifrog-sheet.webp"
     ].forEach((path) => window.GhImg.cacheAsset(path));
@@ -2538,7 +2572,8 @@
     const visual = document.querySelector(".hero-visual");
     const hero = document.querySelector(".hero");
     const copy = document.querySelector(".hero-copy");
-    const tiles = visual ? Array.from(visual.querySelectorAll(".hero-tile")) : [];
+    const tiles = visual ? Array.from(visual.querySelectorAll(".intro-projectile")) : [];
+    const links = visual ? Array.from(visual.querySelectorAll(":scope > .hero-tile")) : [];
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
     const homeVisits = Math.max(0, Number(storageGet("nai-home-visits")) || 0);
     const showSkip = homeVisits > 0;
@@ -2551,7 +2586,7 @@
       document.dispatchEvent(new Event("home-intro-finished"));
       cacheHomeOriginals();
     };
-    if (!visual || !tiles.length || reduced.matches || (location.hash && location.hash !== "#/")) {
+    if (!visual || !tiles.length || (location.hash && location.hash !== "#/")) {
       finishWithoutMotion();
       return;
     }
@@ -2574,11 +2609,12 @@
       skip.textContent = "跳过开场";
       document.body.appendChild(skip);
     }
-    const inertNodes = Array.from(document.body.children).filter((node) => node !== skip && node.id !== "naiPet" && !["SCRIPT", "STYLE"].includes(node.tagName));
+    const inertNodes = Array.from(document.body.children).filter((node) => node !== visual && node !== hero && node !== skip && node.id !== "naiPet" && !["SCRIPT", "STYLE"].includes(node.tagName));
     const previousInert = inertNodes.map((node) => node.inert);
     inertNodes.forEach((node) => { node.inert = true; });
+    const previousCopyInert = copy ? copy.inert : false;
+    if (copy) copy.inert = true;
     const halfSizes = tiles.map((tile) => tile.offsetWidth / 2);
-    tiles.forEach((tile) => { tile.style.opacity = "0"; });
     let route = null;
     let frameIndex = 0;
     let eventIndex = 0;
@@ -2586,30 +2622,85 @@
     let active = true;
     let phase = "waiting";
     let raf = 0;
+    let otherRaf = 0;
+    let otherTime = 0;
+    let otherElapsed = 0;
+    let otherFrame = 0;
+    let otherRow = 7 + Math.floor(Math.random() * 3);
+    const otherSprite = visual.querySelector(".hero-art-other");
+    const menuSprites = Array.from(visual.querySelectorAll(".hero-art-games, .hero-art-tools"));
+    const menuSpriteFrames = menuSprites.map((node) => ({ node, frame: 0, elapsed: 0 }));
+    const paintMenuSprite = (sprite) => {
+      paintMenuSpriteFrame(sprite.node, sprite.frame);
+    };
+    const otherAnimation = () => petAnimationData && petAnimationData.animations.find((item) => item && item.row === otherRow - 1);
+    const paintOtherFrame = () => {
+      const animation = otherAnimation();
+      if (!animation || !otherSprite) return;
+      const columns = Number(petAnimationData.columns) || 8;
+      const rows = Number(petAnimationData.rows) || 10;
+      const column = Math.min((animation.durations || []).length - 1, otherFrame);
+      otherSprite.style.backgroundPosition = (column / (columns - 1) * 100) + "% " + (animation.row / (rows - 1) * 100) + "%";
+    };
+    const animateOther = (now) => {
+      if (!active || reduced.matches || !otherSprite) return;
+      if (!otherTime) otherTime = now;
+      const delta = Math.min(100, now - otherTime);
+      otherElapsed += delta;
+      otherTime = now;
+      menuSpriteFrames.forEach((sprite) => {
+        sprite.elapsed += delta;
+        while (sprite.elapsed >= 120) {
+          sprite.elapsed -= 120;
+          sprite.frame = (sprite.frame + 1) % 8;
+          paintMenuSprite(sprite);
+        }
+      });
+      let animation = otherAnimation();
+      let guard = 0;
+      while (animation && otherElapsed >= (animation.durations[otherFrame] || 120) && guard++ < 32) {
+        otherElapsed -= animation.durations[otherFrame] || 120;
+        otherFrame += 1;
+        if (otherFrame >= animation.durations.length) {
+          const choices = [7, 8, 9].filter((row) => row !== otherRow);
+          otherRow = choices[Math.floor(Math.random() * choices.length)];
+          otherFrame = 0;
+          animation = otherAnimation();
+        }
+      }
+      paintOtherFrame();
+      otherRaf = requestAnimationFrame(animateOther);
+    };
     const onKey = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
         finish(false);
-      } else if (event.key === "Tab" && skip) {
+      } else if (event.key === "Tab") {
         const pet = $("naiPet");
-        const focusable = phase === "waiting" && pet && !pet.hidden ? [pet, skip] : [skip];
+        const focusable = (pet && !pet.hidden ? links.concat(pet) : links).concat(skip ? [skip] : []);
+        if (!focusable.length) return;
         const index = focusable.indexOf(document.activeElement);
         event.preventDefault();
         focusQuietly(focusable[(index + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length]);
       }
     };
     const onRoute = () => finish(false);
-    const onResize = () => finish(false);
+    const introViewport = { width: window.innerWidth, height: window.innerHeight };
+    const onResize = () => {
+      if (window.innerWidth !== introViewport.width || window.innerHeight !== introViewport.height) finish(false);
+    };
     const onReducedMotion = (event) => {
       if (event.matches) finish(false);
     };
     const cleanup = () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(otherRaf);
       document.removeEventListener("keydown", onKey, true);
       window.removeEventListener("hashchange", onRoute);
       window.removeEventListener("resize", onResize);
       reduced.removeEventListener("change", onReducedMotion);
       inertNodes.forEach((node, index) => { node.inert = previousInert[index]; });
+      if (copy) copy.inert = previousCopyInert;
     };
     const finish = (animateText) => {
       if (!active) return;
@@ -2680,6 +2771,8 @@
 
     const start = async () => {
       if (!active || phase !== "waiting") return;
+      visual.classList.add("is-launching");
+      if (reduced.matches) { finish(false); return; }
       phase = "fear";
       unlockIntroAudio();
       await preloadVoice(INTRO_FEAR.src);
@@ -2687,12 +2780,12 @@
       playVoiceSrc(INTRO_FEAR.src, null, INTRO_FEAR.duration).catch(() => {});
       await window.NaiPet.fearIntro();
       if (!active) return;
-      const billiardsReady = await waitForHeroImages(1000);
+      await waitForHeroImages(1000);
       if (!active) return;
       phase = "flee";
       await window.NaiPet.fleeIntro();
       if (!active) return;
-      if (!billiardsReady || !route) {
+      if (!route) {
         finish(true);
         return;
       }
@@ -2707,6 +2800,10 @@
     petReady.then((ready) => {
       if (!active) return;
       if (!ready || !window.NaiPet.prepareIntro(start)) { finish(false); return; }
+      menuSpriteFrames.forEach(paintMenuSprite);
+      if (!reduced.matches) otherRaf = requestAnimationFrame(animateOther);
+      else paintOtherFrame();
+      if (reduced.matches) return;
       // 等待点击的时间也用于预演物理和加载素材。
       raf = requestAnimationFrame(() => { if (active) route = precomputeIntro(tiles); });
     }).catch(() => finish(false));
@@ -2780,7 +2877,7 @@
     setupReveal();
     loadStars();
     const petReady = startPet();
-    heroImagesReady = petReady.then(() => preloadHeroImages()).catch(() => false);
+    heroImagesReady = preloadHeroImages().catch(() => false);
     el.grid.innerHTML = skeletonMarkup(8);
     prepareIntroAudio();
     homeAssetsReady = (async () => {

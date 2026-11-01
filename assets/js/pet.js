@@ -288,7 +288,7 @@
     const dt = Math.min(0.05, (now - lastTick) / 1000 || 0);
     lastTick = now;
     const size = viewport().height;
-    if (!(intro && intro.phase === "pause")) {
+    if (!(intro && (intro.phase === "pause" || (reducedMotion && intro.phase === "waiting")))) {
       advanceFrame(dt * 1000 * (intro && intro.phase === "flee" ? 2.8 : 1));
     }
     if (intro) {
@@ -617,13 +617,14 @@
     node.hidden = false;
     node.classList.add("is-intro-pet");
     node.style.zIndex = "10000";
-    node.setAttribute("aria-label", "戳一戳，开始浏览奶-hub");
+    node.setAttribute("aria-label", "奶蛙表情包，点击奶蛙开始浏览奶-hub");
     resizeSprite(Math.round(Math.min(260, Math.max(180, Math.min(viewport().width * 0.5, viewport().height * 0.32)))));
     x = (viewport().width - cellW) / 2;
     y = (viewport().height - cellH) / 2;
     setState("sleep", 0);
-    bubble.textContent = "戳一戳";
+    bubble.textContent = "奶蛙表情包";
     bubble.hidden = false;
+    bubble.classList.add("pet-intro-label");
     bubble.classList.add("is-on");
     applyTransform();
     if (!frameId) {
@@ -684,6 +685,7 @@
     node.setAttribute("aria-label", "奶蛙桌宠，按 Enter 让它说一句话，按住可以拖动");
     node.tabIndex = paused ? -1 : 0;
     bubble.hidden = true;
+    bubble.classList.remove("pet-intro-label");
     falling = false;
     rotation = 0;
     angularVelocity = 0;
