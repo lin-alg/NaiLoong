@@ -3133,7 +3133,7 @@ html.home-intro-active .intro-skip {
   .site-header .header-inner {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto;
-    grid-template-rows: 44px;
+    grid-template-rows: 44px auto;
     gap: 0 var(--sp-2);
     height: auto;
     padding-top: var(--sp-2);
@@ -3185,26 +3185,38 @@ html.home-intro-active .intro-skip {
   }
 
   .mobile-nav:not([hidden]) {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: var(--sp-4);
-    z-index: 40;
+    position: relative;
     display: grid;
-    width: min(264px, calc(100vw - 32px));
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
     gap: 3px;
-    padding: 6px;
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
+    margin-top: var(--sp-2);
+    padding: var(--sp-2) 0;
+    animation: mobile-nav-in 180ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+  }
+
+  .mobile-nav:not([hidden])::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0 calc((100vw - 100%) / -2);
     background: var(--surface);
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
-    backdrop-filter: blur(16px) saturate(140%);
-    transform-origin: top right;
-    animation: mobile-nav-in 150ms cubic-bezier(0.2, 0.75, 0.3, 1) both;
+    content: "";
+  }
+
+  .mobile-nav[hidden] {
+    display: none;
   }
 
   @keyframes mobile-nav-in {
-    from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+    from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-nav:not([hidden]) {
+      animation: none;
+    }
   }
 
   .mobile-nav a,
