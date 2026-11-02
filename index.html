@@ -152,19 +152,19 @@
   </section>
 
   <nav class="hero-visual" aria-label="奶-hub板块">
-    <a class="hero-tile t1" href="games.html" aria-label="游戏">
+    <a class="hero-tile t1" href="#" data-coming-soon aria-label="奶蛙游戏，正在开发中">
       <span class="hero-art hero-art-games" data-art="assets/pet/naiwa-games.webp" aria-hidden="true"></span>
       <span class="hero-label">奶蛙游戏</span>
     </a>
-    <a class="hero-tile t2" href="tools.html" aria-label="工具">
+    <a class="hero-tile t2" href="https://tools.nai-hub.com" target="_blank" rel="noopener noreferrer" aria-label="奶蛙工具，在新标签页打开">
       <span class="hero-art hero-art-tools" data-art="assets/pet/naiwa-tools.webp" aria-hidden="true"></span>
       <span class="hero-label">奶蛙工具</span>
     </a>
-    <a class="hero-tile t3" href="winners.html" aria-label="排行榜">
+    <a class="hero-tile t3" href="#" data-coming-soon aria-label="奶蛙排行榜，正在开发中">
       <span class="hero-art hero-art-winners" data-art="assets/pet/Winners.webp" aria-hidden="true"></span>
       <span class="hero-label">奶蛙排行榜</span>
     </a>
-    <a class="hero-tile t4" href="other.html" aria-label="其它">
+    <a class="hero-tile t4" href="#" data-coming-soon aria-label="奇思妙想，正在开发中">
       <span class="hero-art hero-art-other" data-art="pet-sheet" aria-hidden="true"></span>
       <span class="hero-label">奇思妙想</span>
     </a>
@@ -346,6 +346,11 @@
         </div>
       </div>
     </div>
+  </dialog>
+
+  <dialog class="coming-soon-dialog" id="comingSoonDialog" aria-labelledby="comingSoonMessage">
+    <p id="comingSoonMessage">正在开发中，敬请期待！</p>
+    <button class="btn btn-primary" id="comingSoonClose" type="button">知道了</button>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

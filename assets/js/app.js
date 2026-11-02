@@ -1625,6 +1625,18 @@
     document.querySelectorAll("[data-upload-trigger]").forEach((button) => {
       button.addEventListener("click", openUploadDialog);
     });
+    document.querySelectorAll("[data-coming-soon]").forEach((tile) => {
+      tile.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (typeof el.comingSoonDialog.showModal === "function") el.comingSoonDialog.showModal();
+        else el.comingSoonDialog.setAttribute("open", "");
+        syncPetPause();
+      });
+    });
+    el.comingSoonClose.addEventListener("click", () => el.comingSoonDialog.close());
+    el.comingSoonDialog.addEventListener("click", (event) => {
+      if (event.target === el.comingSoonDialog) el.comingSoonDialog.close();
+    });
     el.uploadChoose.addEventListener("click", () => el.uploadInput.click());
     el.uploadInput.addEventListener("change", selectUploadFiles);
     el.uploadSubmit.addEventListener("click", startUpload);
@@ -1766,7 +1778,7 @@
       node.addEventListener("click", togglePet);
     });
 
-    [el.imageDialog, el.uploadDialog].forEach((dlg) => {
+    [el.imageDialog, el.uploadDialog, el.comingSoonDialog].forEach((dlg) => {
       dlg.addEventListener("close", syncPetPause);
     });
 
@@ -1876,7 +1888,7 @@
         setMobileMenu(false);
         focusQuietly(el.mobileMenuToggle);
       }
-      if (el.uploadDialog.open || el.imageDialog.open) return;
+      if (el.uploadDialog.open || el.imageDialog.open || el.comingSoonDialog.open) return;
       const tag = document.activeElement && document.activeElement.tagName;
       if (event.key === "/" && tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
         event.preventDefault();
@@ -2730,7 +2742,7 @@
       skip.textContent = "跳过开场";
       document.body.appendChild(skip);
     }
-    const inertNodes = Array.from(document.body.children).filter((node) => node !== visual && node !== hero && node !== skip && node.id !== "naiPet" && !["SCRIPT", "STYLE"].includes(node.tagName));
+    const inertNodes = Array.from(document.body.children).filter((node) => node !== visual && node !== hero && node !== skip && node.id !== "naiPet" && node.id !== "comingSoonDialog" && !["SCRIPT", "STYLE"].includes(node.tagName));
     const previousInert = inertNodes.map((node) => node.inert);
     inertNodes.forEach((node) => { node.inert = true; });
     const previousCopyInert = copy ? copy.inert : false;
@@ -2793,6 +2805,7 @@
       otherRaf = requestAnimationFrame(animateOther);
     };
     const onKey = (event) => {
+      if (el.comingSoonDialog.open) return;
       if (event.key === "Escape") {
         event.preventDefault();
         finish(false);
@@ -2967,6 +2980,8 @@
     el.favoritesHeading = $("favoritesHeading");
     el.favoritesCount = $("favoritesCount");
     el.uploadDialog = $("uploadDialog");
+    el.comingSoonDialog = $("comingSoonDialog");
+    el.comingSoonClose = $("comingSoonClose");
     el.uploadDialogClose = $("uploadDialogClose");
     el.uploadChoose = $("uploadChoose");
     el.uploadInput = $("uploadInput");

@@ -58,7 +58,7 @@
     font-size: clamp(12px, 0.75vw, 18px);
   }
 
-  :root.home-page .hero.hero-no-visual .hero-inner {
+  :root.home-page .hero-inner {
     width: min(100%, max(68rem, 60vw));
   }
 }
@@ -791,8 +791,8 @@ code {
 
 .hero-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  gap: var(--sp-12);
+  grid-template-columns: minmax(0, 1fr);
+  width: min(100%, 68rem);
   align-items: center;
 }
 
@@ -969,12 +969,15 @@ code {
 }
 
 .stat dd {
+  min-width: 8ch;
+  min-height: 1.2em;
   font-family: var(--mono);
   font-size: 1.75rem;
   font-weight: 600;
   letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   color: var(--text);
-  overflow-wrap: anywhere;
 }
 
 .hero-visual {
@@ -1278,6 +1281,10 @@ html.home-intro-active .intro-skip {
   visibility: visible !important;
 }
 
+html.home-intro-active body > .coming-soon-dialog[open] {
+  visibility: visible !important;
+}
+
 .intro-skip {
   position: fixed;
   left: 50%;
@@ -1324,13 +1331,6 @@ html.home-intro-active .intro-skip {
 
 .hero-visual.is-finished {
   display: none;
-}
-
-.hero.hero-no-visual .hero-inner {
-  grid-template-columns: minmax(0, 1fr);
-  width: min(100%, 68rem);
-  margin-right: auto;
-  margin-left: auto;
 }
 
 /* ---------- Layout ---------- */
@@ -1900,6 +1900,8 @@ html.home-intro-active .intro-skip {
 /* ---------- Original image dialog ---------- */
 .image-dialog {
   width: min(1100px, calc(100vw - 32px));
+  height: min(820px, calc(100vh - 32px));
+  height: min(820px, calc(100dvh - 32px));
   max-width: none;
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
@@ -1921,6 +1923,7 @@ html.home-intro-active .intro-skip {
 .image-dialog-content {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
   max-height: calc(100vh - 32px);
   max-height: calc(100dvh - 32px);
 }
@@ -1991,16 +1994,17 @@ html.home-intro-active .intro-skip {
   position: relative;
   display: grid;
   place-items: center;
-  min-height: 180px;
+  min-height: 0;
   overflow: auto;
   padding: var(--sp-4);
   background: var(--bg-subtle);
 }
 
 .image-dialog-stage img {
+  min-width: 0;
+  min-height: 0;
   max-width: 100%;
-  max-height: calc(100vh - 112px);
-  max-height: calc(100dvh - 112px);
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -2773,11 +2777,14 @@ html.home-intro-active .intro-skip {
 
   .image-dialog {
     width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    height: calc(100dvh - 16px);
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
 
   .image-dialog-content {
+    height: 100%;
     max-height: calc(100vh - 16px);
     max-height: calc(100dvh - 16px);
   }
@@ -2792,13 +2799,8 @@ html.home-intro-active .intro-skip {
   }
 
   .image-dialog-stage {
-    min-height: 120px;
+    min-height: 0;
     padding: var(--sp-2);
-  }
-
-  .image-dialog-stage img {
-    max-height: calc(100vh - 80px);
-    max-height: calc(100dvh - 80px);
   }
 
   .hero {
@@ -2829,7 +2831,13 @@ html.home-intro-active .intro-skip {
   }
 
   .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--sp-6);
+  }
+
+  .hero-stats .stat dd {
+    min-width: 0;
   }
 
   .hero-actions .btn { min-height: 3rem; font-size: 1rem; }
@@ -2973,6 +2981,35 @@ html.home-intro-active .intro-skip {
 .upload-dialog::backdrop {
   background: rgba(1, 4, 9, 0.76);
   backdrop-filter: blur(4px);
+}
+
+.coming-soon-dialog {
+  justify-items: center;
+  gap: var(--sp-5);
+  width: min(360px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: var(--sp-8);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.coming-soon-dialog[open] {
+  display: grid;
+}
+
+.coming-soon-dialog::backdrop {
+  background: rgba(1, 4, 9, 0.76);
+  backdrop-filter: blur(4px);
+}
+
+.coming-soon-dialog p {
+  font-size: 18px;
+  line-height: 1.5;
 }
 
 .upload-dialog-content {
