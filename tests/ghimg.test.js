@@ -182,5 +182,11 @@ async function checkProbe(successIndex, expectedRoute) {
   await checkProbe(1, "p0");
   await checkProbe(3, "p2");
   await checkProbe(4, "direct");
+  for (const indexedDB of [undefined, { open() { throw new Error("Storage disabled"); } }]) {
+    const unavailable = { window: {}, indexedDB };
+    vm.runInNewContext(fs.readFileSync("assets/js/ghimg.js", "utf8"), unavailable);
+    assert.strictEqual(await unavailable.window.GhImg.cachedAsset("assets/pet/naifrog-sheet.webp"), null);
+    assert.strictEqual(await unavailable.window.GhImg.cacheAsset("assets/pet/naifrog-sheet.webp"), false);
+  }
   console.log("GitHub image URL conversion and route probing passed");
 })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -1152,11 +1152,6 @@ code {
   height: 100%;
 }
 
-.hero-art-games { background-image: url("../pet/naiwa-games.webp"); }
-.hero-art-tools { background-image: url("../pet/naiwa-tools.webp"); }
-.hero-art-winners { background-image: url("../pet/Winners.webp"); }
-.hero-art-other { background-image: url("../pet/naifrog-sheet.webp"); }
-
 .hero-visual.is-intro .hero-art-winners {
   bottom: calc(9% - 2rem);
   width: 145%;

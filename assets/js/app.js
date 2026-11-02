@@ -59,6 +59,8 @@
   let homeAssetsReady = Promise.resolve();
   let heroImagesReady = Promise.resolve(false);
   let petAnimationData = null;
+  let petSheetReady = null;
+  const homeImages = new Map();
   const menuSpriteFrames = new WeakMap();
 
   const THEME_NAMES = { auto: "跟随系统", light: "浅色", dark: "深色", naiwa: "奶蛙" };
@@ -1441,26 +1443,26 @@
     toast(window.NaiPet.isHidden() ? "奶蛙躲起来了" : "奶蛙出来了");
   }
 
+  function loadPetSheet() {
+    if (!petSheetReady) petSheetReady = (async () => {
+      const pet = await fetchJSON(CONFIG.petData);
+      if (!pet || !pet.sheet || !Array.isArray(pet.animations) || !pet.animations.some((item) => item && item.id === "idle")) return null;
+      petAnimationData = pet;
+      const preview = window.GhImg && window.GhImg.compressedAsset ? window.GhImg.compressedAsset(pet.sheet) : pet.sheet;
+      const image = await loadHomeImage(pet.sheet, preview);
+      return image ? { pet, image } : null;
+    })().catch(() => null);
+    return petSheetReady;
+  }
+
   async function startPet() {
     if (!window.NaiPet) return false;
-    let pet;
-    try {
-      pet = await fetchJSON(CONFIG.petData);
-    } catch (err) {
-      return false;
-    }
-    if (!pet || !pet.sheet || !Array.isArray(pet.animations) || !pet.animations.some((item) => item && item.id === "idle")) return false;
-    petAnimationData = pet;
-    const cachedSheet = window.GhImg && window.GhImg.cachedAsset ? await window.GhImg.cachedAsset(pet.sheet) : null;
-    const sheetUrl = cachedSheet || (window.GhImg && window.GhImg.compressedAsset
-      ? window.GhImg.compressedAsset(pet.sheet)
-      : pet.sheet);
-    const sheet = new Image();
-    sheet.src = sheetUrl;
-    if (!await waitForImage(sheet, 5000)) return false;
+    const loaded = await loadPetSheet();
+    if (!loaded) return false;
+    const { pet, image } = loaded;
     const narrow = (window.innerWidth || 1024) < 600;
     window.NaiPet.start({
-      sheet: sheetUrl,
+      sheet: image.src,
       frameWidth: pet.frameWidth,
       frameHeight: pet.frameHeight,
       columns: pet.columns,
@@ -2635,19 +2637,44 @@
     );
   }
 
+  function loadHomeImage(source, preview) {
+    if (homeImages.has(source)) return homeImages.get(source);
+    const loading = (async () => {
+      let cached = window.GhImg && window.GhImg.cachedAsset ? await window.GhImg.cachedAsset(source) : null;
+      if (!cached && !preview && window.GhImg && window.GhImg.cachedAsset && window.GhImg.cacheAsset) {
+        if (await window.GhImg.cacheAsset(source)) cached = await window.GhImg.cachedAsset(source);
+      }
+      const urls = Array.from(new Set([cached, preview, source].filter(Boolean)));
+      for (const url of urls) {
+        const image = new Image();
+        image.src = url;
+        if (await waitForImage(image, 8000)) return image;
+      }
+      homeImages.delete(source);
+      return null;
+    })();
+    homeImages.set(source, loading);
+    return loading;
+  }
+
   function preloadHeroImages() {
     const nodes = Array.from(document.querySelectorAll(".hero-visual [data-art], .intro-projectile img[data-src]"));
-    const images = nodes.map((node) => {
-      const source = node.dataset.src || (node.dataset.art === "pet-sheet" ? "assets/pet/naifrog-sheet.webp" : node.dataset.art);
-      if (!source) return Promise.resolve(false);
-      const image = new Image();
-      image.src = source;
+    const images = nodes.map(async (node) => {
+      let image;
+      if (node.dataset.art === "pet-sheet") {
+        const loaded = await loadPetSheet();
+        image = loaded && loaded.image;
+      } else {
+        const source = node.dataset.src || node.dataset.art;
+        if (!source) return false;
+        image = await loadHomeImage(source);
+      }
+      if (!image) return false;
       if (node.dataset.src) node.src = image.src;
       else if (!node.matches(".hero-art-games, .hero-art-tools")) {
         node.style.backgroundImage = 'url("' + image.src.replace(/"/g, "%22") + '")';
       }
-      return waitForImage(image, 8000).then((ready) => {
-        if (!ready || !node.matches(".hero-art-games, .hero-art-tools")) return ready;
+      if (node.matches(".hero-art-games, .hero-art-tools")) {
         const canvas = document.createElement("canvas");
         canvas.className = "hero-art-canvas";
         canvas.width = Math.round(image.naturalWidth / 8);
@@ -2658,8 +2685,8 @@
         node.replaceChildren(canvas);
         menuSpriteFrames.set(node, { canvas, context, image, frameWidth: image.naturalWidth / 8 });
         paintMenuSpriteFrame(node, 0);
-        return true;
-      });
+      }
+      return true;
     });
     return Promise.all(images).then((results) => results.every(Boolean));
   }
@@ -2676,7 +2703,11 @@
       "assets/pet/Winners.webp",
       "assets/placeholders/fallback.gif",
       "assets/pet/naifrog-sheet.webp"
-    ].forEach((path) => window.GhImg.cacheAsset(path));
+    ].forEach(async (path) => {
+      if (homeImages.has(path)) await homeImages.get(path);
+      if (window.GhImg.cachedAsset && await window.GhImg.cachedAsset(path)) return;
+      await window.GhImg.cacheAsset(path);
+    });
   }
 
   function waitForHeroImages(timeout) {

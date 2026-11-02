@@ -258,7 +258,13 @@
     if (assetDbPromise) return assetDbPromise;
     assetDbPromise = new Promise((resolve) => {
       if (typeof indexedDB === "undefined") return resolve(null);
-      const request = indexedDB.open("nai-image-cache", 1);
+      let request;
+      try {
+        request = indexedDB.open("nai-image-cache", 1);
+      } catch (err) {
+        resolve(null);
+        return;
+      }
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains("images")) request.result.createObjectStore("images");
       };
@@ -294,8 +300,10 @@
     const key = pageAsset(path);
     const db = await assetDb();
     if (!key || !db || typeof fetch !== "function") return false;
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
     try {
-      const response = await fetch(key, { cache: "force-cache" });
+      const response = await fetch(key, controller ? { cache: "force-cache", signal: controller.signal } : { cache: "force-cache" });
       if (!response.ok) return false;
       const blob = await response.blob();
       await new Promise((resolve, reject) => {
@@ -307,6 +315,7 @@
       });
       return true;
     } catch (err) { return false; }
+    finally { if (timer !== null) clearTimeout(timer); }
   }
 
   function start() {
