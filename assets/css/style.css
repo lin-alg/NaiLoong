@@ -990,6 +990,9 @@ code {
 
 .hero-tile {
   --rot: 0deg;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
   position: absolute;
   width: 46%;
   border: 1px solid var(--border);
