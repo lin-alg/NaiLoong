@@ -1333,6 +1333,10 @@ html.home-intro-active body > .coming-soon-dialog[open] {
   display: none;
 }
 
+:root.home-direct-route .hero-visual {
+  display: none;
+}
+
 /* ---------- Layout ---------- */
 .layout {
   display: grid;
