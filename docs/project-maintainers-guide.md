@@ -234,7 +234,9 @@ https://raw.githubusercontent.com/<owner>/NaiLoong/<commit>/assets/memes/laugh.p
 | `pr-check.yml`（Data Linter） | PR 或手动运行 | 运行本地检查中的四条命令。 |
 | `meme-hash.yml`（Meme Image Hash Check） | 在投稿评论创建、编辑或删除，PR，定时或手动时运行 | 下载图片，检查 5 MB 上限和 SHA-256 重复，更新投稿状态；网络临时错误最多重试 4 次；每天北京时间 02:00 归档已入库哈希。 |
 | `generate-previews.yml`（Generate Meme Previews） | 合并到 `main` 的 PR | 为新增或替换的图片生成 WebP，写入主仓库 `preview` 分支。 |
-| `deploy.yml` | `main` 更新或手动运行 | 四条检查全部通过后发布 GitHub Pages。 |
+| `deploy.yml` | `main` 更新或手动运行 | 四条检查全部通过后触发 Cloudflare Pages 的 `main` 部署；从非 `main` 分支手动运行只执行检查，不部署。 |
+
+Cloudflare Pages 使用 Git 集成读取仓库，但须关闭自动生产部署和所有预览分支部署；GitHub Actions 检查通过后请求绑定 `main` 的 Deploy Hook。仓库只需配置 Secret `CLOUDFLARE_DEPLOY_HOOK_URL`，不保存 Cloudflare API Token。Deploy Hook URL 仅能触发其绑定项目和分支的部署；若泄露，应在 Cloudflare 删除并重新创建 Hook，再更新仓库 Secret。
 
 `validate_data.py` 只检查 URL 结构和数据中的重复 URL，不下载图片。图片下载、体积检查和内容去重由独立的哈希工作流执行。哈希工作流和预览图工作流使用主仓库脚本，不执行 PR 分支代码。`data_editor.py`、浏览器差异扫描和本地 HTTP 服务只使用 Python 标准库，写入前调用同一套 `validate_data()`，并在失败时恢复本次数据修改。
 
