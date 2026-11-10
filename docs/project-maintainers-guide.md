@@ -14,6 +14,7 @@
 | 交互式 Git 投稿教程 | `contribute.html`、`assets/js/contribute.js`、`assets/css/contribute.css` |
 | 本地浏览器数据差异编辑器 | `tools/data-editor/`、`assets/js/editor.js`、`scripts/data_editor_core.py`、`scripts/data_editor_server.py` |
 | 本地 AI 批量标注 | `scripts/data_editor_ai.py` |
+| 投稿前本地相似图筛查 | `tools/meme-similarity/` |
 | 数据加载、路由、分页和页面交互 | `assets/js/app.js` |
 | 首页访客与浏览统计 | `assets/js/stats.js` |
 | 标签解析、搜索和筛选 | `assets/js/search.js` |
@@ -62,6 +63,17 @@ node tests/stats.test.js
 ```
 
 数据、脚本或页面逻辑改动请运行相关检查；只改文档时，检查链接、示例和操作顺序即可。上述项目检查使用 Python 标准库和 Node 内置断言，不请求网络。数据投稿者运行 `python scripts/data_editor.py data` 会启动只监听 `127.0.0.1` 的本地浏览器差异编辑器；`python scripts/data_editor.py --tk data` 保留旧 Tk 编辑器。浏览器工具调用本机 Git 和校验器，不执行 PR 分支代码。可选 AI 标注经本地服务请求用户选择的官方 API，密钥不持久化；Google 视频上传完成识别后会尝试删除临时文件。AI 输出不得绕过人工复核与完整数据校验。动画转成 MP4 时保留完整时长；OpenAI / Anthropic 输入按全片取最多 160 个候选帧，用 32×32 RGB 画面去掉近似重复和循环画面，再按时间顺序上传最多 12 张代表帧及其时间位置。Gemini 使用完整 MP4，不额外抽取用不到的帧。
+
+投稿前可用[本地相似图工具](../tools/meme-similarity/README.md)，将待投稿目录与主仓库 `preview` 分支的 `previews/` 全量比对。用 `fetch + worktree` 下载并展开预览，无需推送到 Fork。工具单独依赖 Pillow，64 位 pHash / dHash 任一距离不超过阈值就生成同名提示文件和离线对照报告，不改原图；默认阈值为 14 / 12，候选需人工判断。动图只比首帧，预览尚未生成的条目不在比对范围内，不改变工作流的 SHA-256 去重规则。
+
+修改相似图工具后，额外运行其离线图片测试：
+
+```bash
+python -m pip install -r tools/meme-similarity/requirements.txt
+python -m unittest discover -s tools/meme-similarity -p "test_*.py" -v
+```
+
+预览报告和交互式教程改动也需本地检查桌面、窄屏、键盘操作及减少动态效果。
 
 ## 数据如何变成页面
 

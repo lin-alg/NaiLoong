@@ -141,6 +141,8 @@ E --> C --> B --> A
 | `image` | 长期保存原图 | 否 |
 | `meme/naiwa-laugh` 等工作分支 | 提交这次投稿的 JSON 记录 | 是，合并到主仓库 `main` |
 
+此外，会下载主仓库的 `preview` 分支到旁边的本地工作目录，供上传前筛查相似图使用。它由主仓库生成，无需推送到自己的 Fork。
+
 ## 二. 安装 Git 并创建 Fork
 
 1. Windows 用户安装 [Git for Windows](https://git-scm.com/downloads/win) 。下文所介绍的命令都在 Git Bash 中运行。
@@ -208,13 +210,50 @@ ff-only 的全称是 fast-forward-only。目标分支包含当前分支的全部
 
 处理投稿区图片时，选择“⚪ 未处理”的评论，右键另存为每张表情图片，保证下载的是原图，否则图片检查可能不通过。（你也可以不从投稿区选图，而是上传自己的表情。）
 
+### 1. 准备本次新图与 Python
+
+先在仓库外建立一个只放本次新图的文件夹，例如与 `NaiLoong` 并排的 `待投稿表情` 文件夹，把准备投稿的原图放进去。后面的 `../待投稿表情` 请替换成你的实际路径，保留引号；Windows 也可以填写 `"D:/图片/新表情"`。
+
+安装 [Python 3.9 或更新版本](https://www.python.org/downloads/)，Windows 安装界面勾选 **Add Python to PATH**，然后检查：
+
+```bash
+python --version
+```
+
+应输出版本号。如果 Windows 的 `python` 打开微软商店，可以用 `py --version` 检查，并在后续命令中用 `py` 替换 `python`。
+
+### 2. 下载预览并筛查相似表情
+
+在当前 `main` 分支的仓库根目录，依次运行：
+
+```bash
+git fetch upstream preview
+git worktree add --detach ../NaiLoong-preview upstream/preview
+python -m pip install -r tools/meme-similarity/requirements.txt
+python tools/meme-similarity/check.py "../待投稿表情" --previews "../NaiLoong-preview/previews"
+```
+
+`fetch upstream preview` 下载主仓库的预览分支。`worktree add` 把它展开到旁边的 `NaiLoong-preview` 文件夹，让代码与预览图能同时使用；`--detach` 表示只查看下载的版本，无需新建分支。当前目录仍在 `main`，预览分支**无需 push 到自己的 Fork**。Pillow 是筛查工具用于读取图片的依赖，只需安装一次。
+
+工具递归比较新图文件夹与全部已有预览，使用 pHash 和 dHash；任一算法的距离不超过阈值就会标记，便于人工复核。运行后：
+
+1. 打开新图文件夹中的 `_相似图筛查/<本次运行编号>/report.html`，并排查看新图与最接近的已有图。报告图片已嵌入，可以离线看；“查看已有原图”链接用于联网核对完整动图。
+2. 疑似相似的新图旁会出现同名标记，例如 `meme.gif.疑似相似.txt`。原图的内容和文件名保持不变。
+3. 核对文字、动作和表达含义后，自行删去不准备收录的新图。只将保留的原图用于下一步上传，报告与标记不用上传。
+
+默认条件为 pHash 距离不超过 14 **或** dHash 距离不超过 12，距离越小画面越接近。动图只比首帧；裁剪、加边、镜像或预览尚未生成都可能导致漏检，未标记也需自行核对。若提示读取失败，先处理报告中的失败文件再重跑。阈值调整见[工具说明](../tools/meme-similarity/README.md#调整筛查范围)。
+
+整理投稿区评论时，如果决定排除其中部分相似图，先请投稿者在“未处理”状态下编辑原评论，再按更新后的评论准备全部原图；认领一条评论的 PR 仍须包含该评论的全部图片。
+
+### 3. 上传保留的原图
+
 下面以 `meme.gif` 为例，介绍上传图片到 image 分支的流程。（image分支不要合并到其它分支！）
 
 首先切换到image分支：
 ```bash
 git switch -c image
 ```
-在 `assets` 文件夹内建立 `memes` 文件夹，将 `meme.gif` 放进去，多个表情同理。
+在 `assets` 文件夹内建立 `memes` 文件夹，将筛查后保留的 `meme.gif` 复制进去，多个表情同理。
 
 然后 add 所有表情文件并提交。
 ```bash
@@ -253,23 +292,9 @@ git switch -c meme/naiwa-laugh
 
 `meme/naiwa-laugh` 是示例分支名，你可以换成自己喜欢的，能描述本次投稿的分支名字。
 
-### 1. 安装 Python
+### 1. 启动编辑器
 
-浏览器编辑器使用 Python 标准库启动本地服务，不需要安装第三方 Python 包。Windows 用户从 [Python 官网](https://www.python.org/downloads/) 安装 Python 3.9 或更新版本，安装界面请勾选 **Add Python to PATH**。安装后在 Git Bash 或 PowerShell 检查：
-
-```bash
-python --version
-```
-应输出python版本号。
-Windows 上 运行`python` 命令可能会打开微软商店，可改用 Python 启动器：
-
-```bash
-py --version
-```
-
-编辑器不使用 `pip install`，也不需要虚拟环境。只有选择旧版 `--tk` 编辑器时才需要 Tkinter；Linux 缺少它时，安装发行版提供的 `python3-tk`。
-
-### 2. 启动编辑器
+第四节已安装 Python。浏览器编辑器只用 Python 标准库，无需另外安装包。只有选择旧版 `--tk` 编辑器时才需要 Tkinter；Linux 缺少它时，安装发行版提供的 `python3-tk`。
 
 在仓库根目录运行下面的命令。命令最后的 `data` 是仓库里的数据文件夹，可以替换成你本地仓库的实际路径：
 
@@ -285,7 +310,7 @@ py scripts/data_editor.py data
 
 浏览器会打开本地地址（默认 <http://127.0.0.1:8765/>，端口被占用时自动换一个）。保持终端运行；关闭服务用 `Ctrl+C`。页面读取 `data/manifest.json`，角色、分类和标签选项来自当前数据。终端当前分支应为 `meme/...`。
 
-### 3. 填写记录
+### 2. 填写记录
 
 1. 选择要扫描的最近 N 个 image commit，点击 **扫描 image 分支**。你在image分支上新提交了几个分支，N就填几。
 2. 查看新增、更新 / 重命名和删除提醒。编辑器自动生成对应 commit 的图片 URL；原有条目会显示原图与新图的对比。删除图片时默认保留网站记录，只有明确勾选“同时从网站数据移除此条记录”才会删记录。
@@ -298,7 +323,7 @@ py scripts/data_editor.py data
 
 想使用旧版编辑器，可使用 `python scripts/data_editor.py --tk data`。旧版支持角色与分类的新增、修改和删除；支持新增标签、重命名标签和修改标签翻译，新增标签会给已有条目补入 `null`。图片 URL 可粘贴完整 GitHub blob / RAW 地址，保存时自动转为紧凑格式。
 
-### 4. 在本地运行检查
+### 3. 在本地运行检查
 
 编辑器保存时已经自动校验数据；提交前仍建议在仓库根目录运行一次完整的 Python 检查：
 
@@ -329,7 +354,7 @@ git push -u origin meme/naiwa-laugh
 4. 写明角色、分类和图片来源（如必要）。如果是整理投稿区的表情，请把每条评论的完整链接粘贴进 PR 描述，例如 `https://github.com/lin-alg/NaiLoong/issues/1#issuecomment-123456`。一个 PR 可以认领多条评论，但必须收录这些评论中的全部图片。旧 PR 也可以继续使用 `MEME-CLAIM-...` 口令。
 5. 点击 **Create pull request**，等待 Github Action 检查代码。如有报错时查看详情，按 [FAQ](#pr-检查失败怎么修改) 重新更改代码，然后commit。
 
-维护者审核并合并后，网站会自动生成预览图并更新。投稿者不用拉取仓库的`preview`分支。
+维护者审核并合并后，网站会自动生成新预览图并更新。下次投稿前再更新本地预览图库进行筛查，步骤见下方 FAQ。
 
 ## 修订已有表情
 
@@ -362,6 +387,20 @@ git status
 git switch main
 git pull --rebase upstream main
 git push origin main
+```
+
+上传新图前，再更新预览图库。下面假设首次投稿时已按第四节创建 `NaiLoong-preview` 工作目录；尚未创建时先完成第四节的筛查准备：
+
+```bash
+git fetch upstream preview
+git -C ../NaiLoong-preview status
+git -C ../NaiLoong-preview merge --ff-only upstream/preview
+python tools/meme-similarity/check.py "../待投稿表情" --previews "../NaiLoong-preview/previews"
+```
+
+`git -C` 表示在指定工作目录执行命令。确认预览目录没有修改，再用 `merge --ff-only` 更新；筛查路径替换成本次实际的新图文件夹。查看最新报告、人工决定保留哪些原图后，再切换图片分支：
+
+```bash
 git switch image
 git pull --ff-only origin image
 ```
@@ -369,6 +408,12 @@ git pull --ff-only origin image
 如果 `image` 分支只在 GitHub 上存在，本地还没有，先运行 `git fetch origin`，再用 `git switch --track origin/image` 代替最后两条命令。
 
 将新图片复制到 `assets/memes` 中，然后执行第四节中的 `add → commit → push → rev-parse HEAD` 流程，记下新哈希。再从最新 `main` 建立一个名字不同的工作分支继续。
+
+### 相似图筛查标记太多、读取失败或预览目录已存在怎么办？
+
+相似图只是候选，先对照报告人工核对；可以调低两个阈值缩小范围，或调高阈值扩大范围，见[工具说明](../tools/meme-similarity/README.md#调整筛查范围)。
+
+报告提示读取失败时，本次筛查不完整，修复或移开失败文件再重跑。每次生成独立报告，自动刷新本工具的标记；历史报告可以自行删除。已有预览工作目录时，用“再次投稿”中的更新命令，不重复 `worktree add`。更多情况见[工具排错](../tools/meme-similarity/README.md#再次筛查与排错)。
 
 ### GitHub 上删除工作分支后，本地分支也会消失吗？
 

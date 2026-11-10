@@ -1,3 +1,5 @@
 */__pycache__/
 vibe_images/
 .qoder-preview/
+_相似图筛查/
+*.疑似相似.txt

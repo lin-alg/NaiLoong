@@ -39,6 +39,7 @@ NaiLoong/
 │   └── placeholders/                # 占位图片
 ├── contribute.html                  # 交互式 Git 投稿教程
 ├── tools/data-editor/               # 本地表情数据编辑器
+├── tools/meme-similarity/            # 投稿前本地相似图筛查
 ├── data/
 │   ├── manifest.json                # 角色和分类目录
 │   ├── pet.json                     # 桌宠动作表

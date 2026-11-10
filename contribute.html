@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <title>Git 新手投稿 · 奶-hub</title>
-  <meta name="description" content="跟随奶-hub 的交互式 Git 投稿教程，完成 Fork、图片分支、差异审核和 Pull Request。">
+  <meta name="description" content="跟随奶-hub 的交互式 Git 投稿教程，完成 Fork、相似图筛查、图片分支、差异审核和 Pull Request。">
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="stylesheet" href="assets/css/contribute.css">
@@ -28,7 +28,7 @@
         <div class="intro-copy">
           <p class="eyebrow">你的第一次 PULL REQUEST</p>
           <h1>奶-hub Git 投稿</h1>
-          <p>上传图片到自己的 image 分支，再用差异编辑器整理表情条目，最后提交一个清晰的 Pull Request。</p>
+          <p>先筛查与已有表情相似的新图，再上传到自己的 image 分支，用差异编辑器整理条目，最后提交 Pull Request。</p>
           <a class="btn btn-primary" href="#lesson">开始第 1 步 <span aria-hidden="true">↓</span></a>
         </div>
         <figure class="intro-meme">
@@ -40,10 +40,10 @@
 
     <section class="lesson container" id="lesson" aria-labelledby="lessonTitle">
       <div class="lesson-topline">
-        <div><p class="eyebrow" id="stepCounter">STEP 1 OF 6</p><h2 id="lessonTitle" tabindex="-1">准备 Fork 和本地仓库</h2></div>
+        <div><p class="eyebrow" id="stepCounter">STEP 1 OF 8</p><h2 id="lessonTitle" tabindex="-1">准备 Fork 和本地仓库</h2></div>
         <span class="time-estimate" id="stepTime">约 5 分钟</span>
       </div>
-      <div class="lesson-progress" role="progressbar" aria-label="教程进度" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1"><span id="lessonProgress"></span></div>
+      <div class="lesson-progress" role="progressbar" aria-label="教程进度" aria-valuemin="1" aria-valuemax="8" aria-valuenow="1"><span id="lessonProgress"></span></div>
 
       <div class="lesson-layout">
         <aside class="lesson-rail" aria-label="教程步骤">
@@ -52,6 +52,7 @@
              <strong>两种分支，各有用途</strong>
              <p><i class="image-dot"></i><code>image</code> 长期保存原图</p>
              <p><i class="work-dot"></i><code>meme/…</code> 提交 JSON 记录</p>
+             <p>另下载 preview 到本地工作目录，用于相似图筛查，无需推送。</p>
              <a class="link" href="docs.html#/github-beginner-guide/术语速查">查看 Git 术语 →</a>
            </div>
         </aside>
@@ -80,6 +81,7 @@
                </div>
              </div>
              <p class="graph-key">A / B：项目基线 · I：图片快照 · J：JSON 快照<br>圆点 = commit · 虚线 = 尚无新 commit · HEAD = 当前分支</p>
+             <p class="graph-key" id="previewState" hidden></p>
              <div class="demo-operation" aria-live="polite" aria-atomic="true"><code id="demoCommand"></code><p id="demoExplanation"></p></div>
              <div class="demo-controls"><button class="btn btn-secondary" id="demoPrevious" type="button">← 上个操作</button><span id="demoCounter"></span><button class="btn btn-secondary" id="demoNext" type="button">下个操作 →</button></div>
            </section>

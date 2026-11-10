@@ -15,7 +15,7 @@
 .lesson-topline h2 { margin-top: 4px; font-size: 22px; font-weight: 620; }
 .time-estimate { color: var(--muted); font-size: 13px; }
 .lesson-progress { height: 3px; margin-top: 17px; background: var(--border-muted); }
-.lesson-progress span { display: block; width: 16.666%; height: 100%; background: var(--primary); transition: width 350ms ease; }
+.lesson-progress span { display: block; width: 12.5%; height: 100%; background: var(--primary); transition: width 350ms ease; }
 .lesson-layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 54px; padding-top: 24px; }
 .lesson-rail { min-width: 0; }
 .lesson-rail > ol { display: grid; gap: 3px; list-style: none; padding: 0; margin: 0; }
