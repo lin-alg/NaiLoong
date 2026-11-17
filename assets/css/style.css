@@ -229,7 +229,15 @@
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: naiwa-draw 360ms 1240ms ease-out forwards;
+  /* 零长度的圆头描边仍会留下白点，开始画入前需要完全隐藏。 */
+  opacity: 0;
+  animation: naiwa-draw-arc 360ms 1240ms ease-out forwards;
+}
+
+@keyframes naiwa-draw-arc {
+  0% { opacity: 0; stroke-dashoffset: 1; }
+  1% { opacity: 1; }
+  100% { opacity: 1; stroke-dashoffset: 0; }
 }
 
 .naiwa-mouth {
